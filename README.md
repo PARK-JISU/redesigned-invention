@@ -135,12 +135,48 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
 3.UI기능 구현
    [게임 내에 보여지는 UI의 기능을 구현.
    
+     UIGame이라는 프리팹을 제작하여 씬이 전환되서 게임에 들어갔을 때, 불러내어서 게임의 씬에 표시(UIGame.cs는 따로 올려 놓음)
+     
+     하단에 있는 요소들은 UIGame에 포함되어있는 요소들
+     
      1.미니맵
        카메라를 플레이어에 부착시켜서 소환시키는 것보다, 플레이어 오브젝트에 지정범위를 설정하여 게임이 진행(게임 씬이 전환 될때, 오브젝트를 소환하는 식으로 사용: Addressable을 사용하여 오브젝트 소환을 용이하게 함)
        
+       -게임내에서 구현되는데 있어서 필요한 요소중 하나이미르로 DonDestroy에 빈 오브젝트를 설치하고 그곳에 CameraManager라는 Cs를 부착후 RefreshMiniMap이라는 함수를 구현시킨다.
+          public void RefreshMiniMap(Transform _transform)
+          {
+              if (MiniMapCamera == null)
+                  return;
+
+              MiniMapCamera.transform.localPosition=new Vector3(_transform.localPosition.x,MiniMapCamera.transform.localPosition.y,_transform.localPosition.z);
+          }
+       
+       그리고 카메라에는 CineCam이라는 cs를 추가하여 다움과 같은 함수를 추가한다(CineCam풀 코드 따로 올려놓음)
+          public void FollowTarget(Transform _target)
+          {
+              transform.position = _target.position;
+
+              cameraRayTarget = CineCamera.transform.position - _target.position;
+              CineCamera.transform.localPosition = new Vector3(OriPos.x, OriPos.y, OriPos.z);
+              Physics.Raycast(_target.position , cameraRayTarget, out cameraRayHitInfo, Vector3.Distance(CineCamera.transform.position, _target.position));
+              Debug.DrawLine(_target.position , CineCamera.transform.position, Color.magenta);
+
+              CamaraManager.Instance.RefreshMiniMap(_target);
+          }
+          
+        텍스쳐를 하나 추가하여 MiniMapCamera의 TargetTexture에 추가한후 CullingMask를 사용하여 보여주고자 하는 오브젝트만 보여주도록 설정한다.
        
      2.인벤
+     
      3.Player의 정보(몬스터,플레이어 각각의 정보들)
+       Player에 대한 정보는 Player오브젝트에 world canvas로 설정하여 오브젝트처럼 지정 위치에 표시
+       -매 프레임마다 가감에 대해 표시하기 위해서 Update에 함수 대입(HP,MP)
+       
+       -플레이어의 HP,MP,경험치에 대한 정보는 다른 플레이어에게 보여줄 필요가 없다고 생각하여 RPC를 쏘지않았음.
+        단.레벨업과 같은 특수 이벤트가 발생했을 경우에는 RPC를 발사하여 모든 플레이어들이 정보를 받아들이도록 설정
+        
+      -몬스터의 경우 플레이어들이 사냥을 할떄 HP에 대한 정보를 가지고 있어야하므로, HP가 가감될때마다 RPC를 쏜다.(몬스터의 사망,플레이어의 사망, 부활 포함)
+      
      
    ]
   
