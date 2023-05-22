@@ -94,9 +94,56 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
 
 
 2.몬스터 소환
-
+   [ 몬스터를 반복적으로 소환하고 Destroy할 경우,데이터의 할당 자체가 어려워지고 트래픽이 삭제부분에세 계속 늘어나서 속도가 느려진다.
+ 
+      이를 방지하기위해 몬스터를 일정량(ex.5마리)정도 한번에 소환하여 몬스터 풀로 만들어서 죽을경우 Destroy이가 아닌 SetActive를 이용하여 비활성화 시켰다가 일정시간 이 지난 이후 다시 활성화하는 식으로 진행켰다.
+      
+      for반복문을 사용하여 몬스터를 소환
+      
+      플레이어와 같이 각각의 몬스터에도 Nplayer가 부착 되어있으므로 사망시 초기화하는 함수를 사용하여, 사망후 부활 했을 때 같은 정보를 가지고 있게 초기화 시킨다.
+      
+      public void AfterDead(PlayerKind _kind)
+       {
+           Debug.Log($"<color=red>Died</color>");
+           switch (_kind)
+           {
+               case PlayerKind.PLAYER:
+                   HP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).HP;
+                   MP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).MP;
+                   break;
+               case PlayerKind.MONSTER:
+                   //TODO 테스트 : 몬스터 정보가져오기
+                   GameManager.Instance.CheckMonsterIsServive(this);
+                   //startcoroutine 순서 바꿔서 넣어주기
+                   //this.gameObject.SetActive(false);
+                   HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
+                   //StartCoroutine(RespawnMon());
+                   break;
+           }
+       }
+      
+      단, photon을 부착시켜야 몬스터가 사망하는것이 다른 플레이어에게도 보이므로 RPC를 쏴서 작성한다.
+      RPC의 경우는 NplayerRPC라는 cs를 따로 제작하여 기능을 구현시켰다.
+      [각각의 오브젝트들이 움직임을 제외한 나머지 애니메이션,UI관련 정보,각각이 가지고 있는 정보를 실시간으로 뿌려주기위해]
+      *NplayerRpC는 Photon부분에서 설명
+ 
+      보스몬스터 또한 비슷한 메커니즘으로 구현된다.
+      단, 보스몬스터의 경우 플레이어가 일정한 구역에 들어갔을 때, 소환 시키는것이 맞다고 생각하여 씬이 이동하거나 보이지 않는 일정범위 콜라이더에 부딪히면 소환하게 RPC를 쏠것이고
+      Target은 AllBumfferd로 구현.
+      
+   ]
 3.UI기능 구현
-
+   [게임 내에 보여지는 UI의 기능을 구현.
+   
+     1.미니맵
+       카메라를 플레이어에 부착시켜서 소환시키는 것보다, 플레이어 오브젝트에 지정범위를 설정하여 게임이 진행(게임 씬이 전환 될때, 오브젝트를 소환하는 식으로 사용: Addressable을 사용하여 오브젝트 소환을 용이하게 함)
+       
+       
+     2.인벤
+     3.Player의 정보(몬스터,플레이어 각각의 정보들)
+     
+   ]
+  
 4.게임 데이터 로드 및 세이브
 
 5.포톤 구현
