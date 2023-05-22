@@ -219,6 +219,7 @@ public class GameManager :Singletone<GameManager>
     #endregion
 
     #region PlayerLoad
+    //Local테스트용=> 포톤 사용x 
     public void LoadPlayer()
     {
         UIManager.Instance.LoadPrefabAsset<GameObject>("Player/Player/Player", LoadPlayerAsset);
@@ -240,6 +241,7 @@ public class GameManager :Singletone<GameManager>
 
     #region MonsterLoad
     //TODO 테스트
+    //Local테스트용=> 포톤 사용x 
     public void LoadMonsterPool(MapType _mapType)
     {
         switch (_mapType)
