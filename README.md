@@ -30,9 +30,67 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
                  일단은 이렇게 4가지만 으로 움직임이 구현이 가능하다.
                  [코드는 NplayerMove의 DefaultMove라고 쓰여져있는 cs줄에 포함이 되어있다.]
                 
-               
     
-   ]
+    -Monster : 플레이어가 일정 범위에서 발견되었을 때 state값을 다르게 하여서 움직임 구현 
+               1.플레이어가 감지 범위 밖에 있는 경우
+               2.플레이어가 감지 범위 안에 있을 경우
+               3.플레이어가 공격 범위 안에 들어와있을 경우 
+               
+               몬스터의 state는 EnumData라는   Cs로 따로 관리
+               public enum MonsterState
+               { 
+               IDLE =0,
+               TRACE,
+               ATTACK,
+               DEAD,
+               }
+               
+               몬스터의 움직임은 매 플레임마다 state값을 확인하여 구동해야하므로 LateUpdate에서 CheckMonsterStata로 구동시킨다
+               -조건은 플레이어와의 거리로 확인
+               [단, 플레이어와의 움직음을 구현하기에 앞서 나의 플레이어를 찾아야하므로, 플레이어를 PunManager에 대입한다->Nplayer.Cs에 있음]
+               
+               몬스터의 공격같은경우, collider를 충돌시키는 것보다 플레이어가 게임을 하는데 용이하게 하기 위해 Animation에 Event를 추가하여 
+               공격 타이밍에 플레이어가 있을 경우 그 플레이어에게 데미지를 넣는 식으로 구현
+               
+                private void OnDrawGizmos()
+                {
+                    //체크를 위해 따로 만들어놓은 bool
+                    if (!DebugMode)
+                        return;
+
+                    Vector3 myPos = transform.position + Vector3.up * 0.5f;
+                    Gizmos.DrawWireSphere(myPos, viewRadious);
+
+                    float lookingAngle = transform.eulerAngles.y;
+                    Vector3 rightDIr = AngleToDir(transform.eulerAngles.y + viewAngle * 0.5f);
+                    Vector3 leftDIr = AngleToDir(transform.eulerAngles.y - viewAngle * 0.5f);
+                    Vector3 lookDIr = AngleToDir(lookingAngle);
+
+                    Debug.DrawRay(myPos, rightDIr * viewRadious, Color.blue);
+                    Debug.DrawRay(myPos, leftDIr * viewRadious, Color.blue);
+                    Debug.DrawRay(myPos, lookDIr * viewRadious, Color.cyan);
+
+                    HitTargets.Clear();
+                    Collider[] Targets = Physics.OverlapSphere(myPos, viewRadious, targetMask);
+
+                    if (Targets.Length == 0)
+                        return;
+
+                    foreach(Collider EnemyColl in Targets)
+                    {
+                        Vector3 targetPos = EnemyColl.transform.position;
+                        Vector3 targetDir = (targetPos = myPos).normalized;
+                        //두 벡터사이의 각을 Mathf.Acos을 통해 라디안으로 바꾸고, 그 값에 Mathf.Rad2Deg를 곱하여 각으로 바꾼다.
+                        float targetAngle = Mathf.Acos(Vector3.Dot(lookDIr, targetDir)) * Mathf.Rad2Deg;
+                        if(targetAngle <= viewAngle *0.5f &&!Physics.Raycast(myPos,targetDir,viewRadious,obstacleMask))
+                        {
+                            HitTargets.Add(EnemyColl.gameObject);
+                            if (DebugMode)
+                                Debug.DrawLine(myPos, targetPos, Color.red);
+                        }
+                    }
+                }             
+    ]
 
 
 2.몬스터 소환
