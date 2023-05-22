@@ -1,7 +1,7 @@
 # redesigned-invention
-최적화
 
-AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입니다
+
+AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입니다(대략적인 내용)
 
 1.움직임 구현
    [
@@ -277,3 +277,155 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
      플레이어에 대한 정보를 저장하는 것과 비슷한 방식
    ]
 5.포톤 구현
+[
+  포톤은 Unity AssetStore에 올라와 있는 Photon2를 사용하였다.
+  
+     일단 포톤을 사용하려면 첫번째로 서버를 세팅해야한다.
+     그래서 이를 해결하기 위해서 PunManager라는 cs를 작성하고 이를 빈오브젝트에 PunManager라는 이름으로 제작하여 구동(스크립트는 올려놓음)
+     
+     private void Awake()
+     {
+        PhotonServerSetting();
+     }
+     
+    public void PhotonServerSetting()
+    {
+        AppSettings _pnAppSettings = PN.PhotonServerSettings.AppSettings;
+
+        _pnAppSettings.AppIdRealtime = "8c42ded6-adcc-41bb-b45c-9e9962fe898a";
+        _pnAppSettings.UseNameServer = true;
+        _pnAppSettings.EnableProtocolFallback = true;
+
+        _pnAppSettings.Server = string.Empty;
+        _pnAppSettings.Port = 0;
+
+        _pnAppSettings.AppVersion = "1.0.0";
+        _pnAppSettings.FixedRegion = "kr";
+
+        PN.PhotonServerSettings.DevRegion = string.Empty;
+
+        Debug.Log("<color=red>PhotonServerSetting is Complete</color>");
+
+        Connect();
+    }
+     
+    public void Connect()
+    {
+        PN.ConnectUsingSettings();
+    }
+    
+    위 과정을 통해 제 포톤 서버에 연결 
+   
+    local로 테스트할때는 괜찮지만 포톤서버를 사용한 테스트를 할 경우 포톤을 사용한 오브젝트 소환을 구현(플레이어,몬스터,오브젝트)
+    
+        Nplayer SpawnPlayer()
+       {
+           string _prefabName = "Player";
+
+           Vector3 _pos = new Vector3(0, 2f, 0);
+           Vector3 _rot = Vector3.zero;
+
+           string _pathName = $"1_Prefab/Player/Player/{_prefabName}";
+
+           object[] _tempData = new object[] { (int)PlayerKind.PLAYER, (int)UserData.Instance.job, (int)PlayerState.NONE };
+
+           GameObject _player = PN.Instantiate(_pathName, _pos, Quaternion.Euler(_rot), 0, null);
+           Nplayer _nplayer = _player.GetComponent<Nplayer>();
+
+           _nplayer.Init(_tempData);
+           //TODO 테스트 
+           if(_nplayer.photonView.IsMine)
+           {
+               MyPlayer = _nplayer;
+               UIManager.Instance.LoadDefaultUI();
+
+           }
+           else
+           {
+               //다른 사람들의 정보를 더함
+               OtherPlayer.Add(_nplayer.ActorNum,_nplayer);
+           }
+
+           //Debug.Log($"<color=cyan>Total Player:[MyPlayer.Num ={MyPlayer.ActorNum}],[OtherPlayer.Cnt ={OtherPlayer.Count}]</color>");
+           return null;
+       }
+    
+     몬스터 또한 같은 식으로 진행한다
+       public Nplayer SpawnMonster()
+       {
+
+           string _preName = MapManager.Instance.mapType.ToString();
+
+           Vector3 _pos = new Vector3(Random.Range(-5, 5), 2f, Random.Range(-5, 5));
+           Vector3 _rot = Vector3.zero;
+
+           string _pathName = $"1_Prefab/Monster/Monster_{_preName}";
+
+           object[] _tempData =new object[] {(int)PlayerKind.MONSTER, (int)MapType.MY_HOME ,false};
+
+           GameObject _monster = PN.Instantiate(_pathName, _pos, Quaternion.Euler(_rot), 0, null);
+           Nplayer _nplayer = _monster.GetComponent<Nplayer>();
+
+           _nplayer.Init(_tempData);
+           return null;
+       }
+       
+    단 플레이어가 소환된다는것을 보여주기 위해선 상호적으로 보여줘야하는 것이기때문에 _nplayer.photonView.IsMine라는 bool을 사용하여 내것과 상대것을 구별하여 가지고 있는다.
+    
+    소환을 하는 함수는 만들었지만 신호를 보내는 RPC를 보내지 않았다.
+    신호를 보내기 위해 NplayerRPC라는 cs를 제작했다.(올려놓음)
+    
+    RPC 리스트에 많은 것을 가지고 있는것보다는 SendRPC,RecieveRPC라는 함수를 만들어 RPC리스트에는 간결하게 추가하였다.
+    그리고 RPCType라는 cs를 작성하여 RPCType별 반응을 할수있는 함수들을 제작했다.(NplayerRPC에 작성)
+    
+       public void SendRPC(object[] _data, RpcTarget _rpcTarget = RpcTarget.All)
+       {
+           GetPlayerComponent();
+
+           photonView.RPC("ReceiveRPC",_rpcTarget,_data);
+
+       }
+
+       [PunRPC]
+       public void ReceiveRPC(object[] _data)
+       {
+           rpcType = (RPCType)JsonDecode.ToInt(_data[0]);
+           Debug.Log($"<color=red> RPC Type is : {rpcType}</color>");
+           object[] _rpcData = new object[_data.Length - 1];
+
+           for(int i= 0; i < _data.Length; i++)
+           {
+               _rpcData[i - 1] = _data[i];
+           }
+
+           RpcTypeFunctionCall(_rpcData);
+       }
+    
+    그리고 RpcTypeFunctionCall에서 object를 매개변수로 하여 정보를 받아들이고 받아들이 RPCType에 따라 reaction을 하게 설정해놓는다.
+    이때 빠른 연산을 위해 switch를 사용
+    ex) 
+       switch(RpcType)
+       {
+          case RPCType.NONE: NoneRPC(_rpcData);break;
+          .
+          .
+          .
+          .
+          
+       }
+       
+       단, object를 파싱하지 않는 함수(보스몬스터 소환,몬스터 소환 등)과 같은 것들은 
+       
+       [PunRPC]
+       public void ReceiveTypeRPC(int _type)
+       {
+           rpcType = (RPCType)_type;
+
+           if (nPlayer == null || nPlayerMove == null)
+               return;
+
+           RpcTypeFunctionCall(null);
+       }
+       을 사용하여 호출만 하도록 설정해 놓았다.
+]
+
