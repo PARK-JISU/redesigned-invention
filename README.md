@@ -131,7 +131,7 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
       단, 보스몬스터의 경우 플레이어가 일정한 구역에 들어갔을 때, 소환 시키는것이 맞다고 생각하여 씬이 이동하거나 보이지 않는 일정범위 콜라이더에 부딪히면 소환하게 RPC를 쏠것이고
       Target은 AllBumfferd로 구현.
       
-   ]
+    ]
 3.UI기능 구현
    [게임 내에 보여지는 UI의 기능을 구현.
    
@@ -167,6 +167,32 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
         텍스쳐를 하나 추가하여 MiniMapCamera의 TargetTexture에 추가한후 CullingMask를 사용하여 보여주고자 하는 오브젝트만 보여주도록 설정한다.
        
      2.인벤
+     서버를 직접 부착시킨것이 아니므로 개인에 대한정보는 개인 클라이언트가 정보를 처리하여 가지고 있도록 Json을 사용하여 저장하고, 인게임내에서는 Dictionary를 사용하여
+     Part별로 정보를 가지고 있도록 Dictionary<CostumeParts,ItemData>를 사용하여 개인 아이템 정보를 가지고 있도록 설정한다.(ItmeData에 대한 정보는 따로 올려놓음)
+     
+      ex)public enum CostumeParts
+         {
+             HEAD=1,
+
+             HAND=2,
+
+             UPPER=3,
+             DOWNER=4,
+
+             FOOT=5,
+
+             GLOVE=6,
+
+             NECK=7,
+
+             TOOL=8,//weapon
+
+             NONE =99,
+         }
+         
+       그리고 게임이 종료되거나 특정한 이벤트가 있을 경우(아이템 장착,해체 등)에 정보를 저장하게 한다.=>원래는 게임이 종료 될때만 게임의 정보를 저장하려고 했지만,
+       게임이 갑자기 종료되거나 이슈가 발생할수있으므로 방어코드로 추가한것.(데이터 저장에 대한것은 GameManager에 있음.올려놓음)
+         
      
      3.Player의 정보(몬스터,플레이어 각각의 정보들)
        Player에 대한 정보는 Player오브젝트에 world canvas로 설정하여 오브젝트처럼 지정 위치에 표시
@@ -175,11 +201,79 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
        -플레이어의 HP,MP,경험치에 대한 정보는 다른 플레이어에게 보여줄 필요가 없다고 생각하여 RPC를 쏘지않았음.
         단.레벨업과 같은 특수 이벤트가 발생했을 경우에는 RPC를 발사하여 모든 플레이어들이 정보를 받아들이도록 설정
         
-      -몬스터의 경우 플레이어들이 사냥을 할떄 HP에 대한 정보를 가지고 있어야하므로, HP가 가감될때마다 RPC를 쏜다.(몬스터의 사망,플레이어의 사망, 부활 포함)
-      
-     
-   ]
+      -몬스터의 경우 플레이어들이 사냥을 할떄 HP에 대한 정보를 가지고 있어야하므로, HP가 가감될때마다 RPC를 쏜다.(몬스터의 사망,플레이어의 사망, 부활 포함) 
+    ]
   
 4.게임 데이터 로드 및 세이브
+    [외부 서버를 붙이지 않고 게임을 구현시키기 위해서 개인에 대한 정보는 개인 클라이언트(개인 기기)가 가지고 있도록 저장
+    
+    PlayerInfo라는 cs를 추가하여 데이터를 보내고,가져오는 pathing road의 값으로 사용(PlayerInfo.cs올려놓음) 
+    public void SaveUserData()
+    {
+        PlayerInfo playerInfoData = new PlayerInfo();
 
+        playerInfoData.Level = UserData.Instance.Level;
+        playerInfoData.NickName =UserData.Instance.Nickname;
+        playerInfoData.EXP = UserData.Instance.EXP;
+        playerInfoData.Money = UserData.Instance.Money;
+
+        Debug.Log($"<color=blue>playerInfoData.NickName:{playerInfoData.NickName}</color> ");
+
+        string ToJson = JsonUtility.ToJson(playerInfoData);
+        string filePath = Application.persistentDataPath + "/" + UserDataFileName;
+
+        Debug.Log($"<color=white>{ToJson}</color> ");
+        File.WriteAllText(filePath, ToJson);
+    }
+    
+    json으로 저장 하기 위해서 JsonUtility.ToJson으로 사용하여 원하는 정보를 string으로 변환하고, 저장 경로 filePath를 지정
+    그 후 File.WriteAllText(파일 경로,정보)를 통해 정보를 저장한다.
+    
+    플레이어에 대한 정보와 코스튬에 대한 정보를 두가지 따로 저장하게 한다.
+    
+       public void SaveCostumeData()
+       {
+           //TODO 테스트 
+           List<ItemData> _temp = DataTblMng.Instance.GetPerCateItemDataList(7);
+
+           string ToJson = JsonConvert.SerializeObject(_temp);
+           string filePth = Application.persistentDataPath + "/" + CostumDataFileName;
+
+           File.WriteAllText(filePth,ToJson);
+
+           ////저장할때 Dictionary<part,itemNum>이렇게 들어있어서 이걸로 저장하면 됨=> itemNum은 Index로 한다
+           Dictionary<int, int> _part = new Dictionary<int, int>();
+           Dictionary<CostumeParts, ItemData> _itemData = new Dictionary<CostumeParts, ItemData>();
+
+           _itemData = UserData.Instance.GetequipToolDic();
+           for(int i=(int)CostumeParts.HEAD;i<=(int)CostumeParts.TOOL;i++)
+           {
+
+               if(_itemData.ContainsKey((CostumeParts)i)==false)
+               {
+                   _itemData.Add((CostumeParts)i,null);
+               }
+
+
+               if (_part.ContainsKey(i) == false)
+               {
+                   if(_itemData[(CostumeParts)i]==null)
+                   {
+                       _part.Add(i, -1);
+                   }
+                   else
+                   {
+                       _part.Add(i, _itemData[(CostumeParts)i].Idx);
+                   }
+               }    
+           }
+
+           string TOJSON = JsonConvert.SerializeObject(_part);
+           string FILEPATH = Application.persistentDataPath + "/" + TmpCostumDataFileName;
+
+           File.WriteAllText(FILEPATH, TOJSON);
+        }
+     
+     플레이어에 대한 정보를 저장하는 것과 비슷한 방식
+   ]
 5.포톤 구현
