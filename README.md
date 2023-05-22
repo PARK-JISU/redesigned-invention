@@ -24,12 +24,12 @@ AOS류 게임 제작에 관한 기능 구현 및 최적화에 대한 파일 입�
                마우스 클릭을 이용한 움직을 구현하기 위해서는 몇가지의 요소들이 필요하다
                  1.NavMeshAgent
                  2.Camera와 플레이어의 상관 관계
-                 3.OriDirection =플레이어의 원래 위치 정보를 가지고 있는 Vector3값
+                 3.OriDirection =플레이어의 원래 방향 정보를 가지고 있는 Vector3값
                  4.currentV,currentH 중력 대신 사용할 변수들
                  
                  일단은 이렇게 4가지만 으로 움직임이 구현이 가능하다.
                  [코드는 NplayerMove의 DefaultMove라고 쓰여져있는 cs줄에 포함이 되어있다.]
-                 
+                
                
     
    ]
