@@ -1,0 +1,98 @@
+using Photon.Pun;
+using UnityEngine;
+using PN = Photon.Pun.PhotonNetwork;
+using Photon.Realtime;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using System.Collections;
+
+public class NplayerRPC :MonoBehaviourPun
+{
+    private RPCType rpcType;
+
+    private Nplayer nPlayer;
+    private NplayerMove nPlayerMove;
+
+
+    private void Awake()
+    {
+        GetPlayerComponent();
+    }
+
+    void GetPlayerComponent()
+    {
+        if (nPlayer == null)
+            nPlayer = GetComponent<Nplayer>();
+
+        if (nPlayerMove == null)
+            nPlayerMove = GetComponent<NplayerMove>();
+    }
+
+    public void SendRPC(object[] _data, RpcTarget _rpcTarget = RpcTarget.All)
+    {
+        GetPlayerComponent();
+
+        photonView.RPC("ReceiveRPC",_rpcTarget,_data);
+
+    }
+
+    [PunRPC]
+    public void ReceiveRPC(object[] _data)
+    {
+        rpcType = (RPCType)JsonDecode.ToInt(_data[0]);
+        Debug.Log($"<color=red> RPC Type is : {rpcType}</color>");
+        object[] _rpcData = new object[_data.Length - 1];
+        
+        for(int i= 0; i < _data.Length; i++)
+        {
+            _rpcData[i - 1] = _data[i];
+        }
+
+        RpcTypeFunctionCall(_rpcData);
+    }
+
+    public void SendTypeRPC(int _rpcType, RpcTarget _rpcTarget = RpcTarget.All)
+    {
+        GetPlayerComponent();
+        if (nPlayer == null)
+            nPlayer = GetComponent<Nplayer>();
+
+        if (nPlayerMove == null)
+            nPlayerMove = GetComponent<NplayerMove>();
+
+        photonView.RPC("ReceiveTypeRPC",_rpcTarget,_rpcType);
+    }
+
+    [PunRPC]
+    public void ReceiveTypeRPC(int _type)
+    {
+        rpcType = (RPCType)_type;
+
+        if (nPlayer == null || nPlayerMove == null)
+            return;
+
+        RpcTypeFunctionCall(null);
+    }
+    void RpcTypeFunctionCall(object[] _rpcData)
+    {
+        GetPlayerComponent();
+
+        switch (rpcType)
+        {
+            case RPCType.NONE: NoneRPC(_rpcData);break;
+
+            case RPCType.SPAWN_MONSTER: PunManager.Instance.SpawnMonster();break;
+            case RPCType.SPAWN_BOSS_MONSTER:PunManager.Instance.SpwawnBossMonster();break;
+
+            case RPCType.ANI_MOVEMENT: nPlayerMove.AniMovementRPC();break;
+        }
+
+
+    }
+
+
+    void NoneRPC(object[] _data)
+    {
+        Debug.Log($"<color=red> This is NoneRPC , Nothing Will be....</color>");
+    }
+}
