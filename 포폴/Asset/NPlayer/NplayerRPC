@@ -27,7 +27,7 @@ public class NplayerRPC :MonoBehaviourPun
         if (nPlayerMove == null)
             nPlayerMove = GetComponent<NplayerMove>();
     }
-
+    //값을 넘길때
     public void SendRPC(object[] _data, RpcTarget _rpcTarget = RpcTarget.All)
     {
         GetPlayerComponent();
@@ -42,15 +42,13 @@ public class NplayerRPC :MonoBehaviourPun
         rpcType = (RPCType)JsonDecode.ToInt(_data[0]);
         Debug.Log($"<color=red> RPC Type is : {rpcType}</color>");
         object[] _rpcData = new object[_data.Length - 1];
-        
-        for(int i= 0; i < _data.Length; i++)
-        {
+
+        for (int i = 1; i < _data.Length; i++)
             _rpcData[i - 1] = _data[i];
-        }
 
         RpcTypeFunctionCall(_rpcData);
     }
-
+    //액션을 넘길때 
     public void SendTypeRPC(int _rpcType, RpcTarget _rpcTarget = RpcTarget.All)
     {
         GetPlayerComponent();
@@ -85,14 +83,80 @@ public class NplayerRPC :MonoBehaviourPun
             case RPCType.SPAWN_BOSS_MONSTER:PunManager.Instance.SpwawnBossMonster();break;
 
             case RPCType.ANI_MOVEMENT: nPlayerMove.AniMovementRPC();break;
+
+            case RPCType.SHOW_ATTACK_EFF:MakeAttackEffRPC();break;
+            case RPCType.ATTACK_MONSTER: CalculateMonsterHPRPC(_rpcData); break;
+
+            case RPCType.DEAD:AfterMonsterDeadRPC(_rpcData);break;
         }
-
-
     }
-
 
     void NoneRPC(object[] _data)
     {
         Debug.Log($"<color=red> This is NoneRPC , Nothing Will be....</color>");
+    }
+
+    void  CalculateMonsterHPRPC(object[] _data)
+    {
+        for(int i=0; i<nPlayer.HitTargets.Count;i++)
+        {
+            if(nPlayer.HitTargets[i].GetPhotonView().ViewID==JsonDecode.ToInt(_data[0]))
+            {
+                Nplayer monster = nPlayer.HitTargets[i].GetComponent<Nplayer>();
+                monster.CalculateMonsterHP(_data);
+            }
+            //nPlayer.HitTargets[i].CalculateMonsterHP(_data);
+        }
+        
+    }
+    void MakeAttackEffRPC()
+    {
+        for (int i = 0; i < nPlayer.HitTargets.Count; i++)
+        {
+            Nplayer monster = nPlayer.HitTargets[i].GetComponent<Nplayer>();
+            monster.MakeAttackEff();
+        }
+    }
+
+    void AfterMonsterDeadRPC(object[] _data)
+    {
+        //경험치
+        if(PunManager.MyPlayer.photonView.ViewID==JsonDecode.ToInt(_data[2]))
+        {
+            //TODO 테스트 
+            PunManager.MyPlayer.EXP += 10;
+            Debug.LogError(PunManager.MyPlayer.EXP);
+        }
+        else
+        {
+            if(PunManager.Instance.OtherPlayer.ContainsKey(JsonDecode.ToInt(_data[2])))
+            {
+                PunManager.Instance.OtherPlayer[JsonDecode.ToInt(_data[2])].EXP += 10;
+            }
+        }
+        
+
+        for(int i= 0; i<GameManager.Instance.MonsterList.Count;i++)
+        {
+            if (GameManager.Instance.MonsterList[i].photonView.ViewID == JsonDecode.ToInt(_data[1]))
+            {
+                GameManager.Instance.MonsterList[i].IsDead = true;
+            }
+        }
+
+        //GameManager.Instance.RespawnMonster(_data);
+        //for(int j=0;j<GameManager.Instance.MonsterList.Count;j++)
+        //{
+        //   if(GameManager.Instance.MonsterList[j].photonView.ViewID ==JsonDecode.ToInt(_data[1]))
+        //    {
+
+        //    }
+        //}
+
+        //for (int i = 0; i < nPlayer.HitTargets.Count; i++)
+        //{
+        //    Nplayer monster = nPlayer.HitTargets[i].GetComponent<Nplayer>();
+        //    monster.AfterMonsterDead(_data);
+        //}
     }
 }
