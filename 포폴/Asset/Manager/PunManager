@@ -132,10 +132,9 @@ public class PunManager : MonoBehaviourPunCallbacks
         else
         {
             //다른 사람들의 정보를 더함
-            OtherPlayer.Add(_nplayer.ActorNum,_nplayer);
+            OtherPlayer.Add(_nplayer.photonView.ViewID,_nplayer);
+            //OtherPlayer.Add(_nplayer.ActorNum, _nplayer);
         }
-
-        //Debug.Log($"<color=cyan>Total Player:[MyPlayer.Num ={MyPlayer.ActorNum}],[OtherPlayer.Cnt ={OtherPlayer.Count}]</color>");
         return null;
     }
 
@@ -151,13 +150,13 @@ public class PunManager : MonoBehaviourPunCallbacks
             UIManager.Instance.LoadDefaultUI();
     }
 
-    //TODO 테스트 RPC로 받아서 쏘기
     public void SpawnMonsters()
     {
+        //IsMasterClient 추가
         MyRpc.SendTypeRPC((int)RPCType.SPAWN_MONSTER, RpcTarget.AllBuffered);
         //SpawnMonster();
     }
-
+   
     public Nplayer SpawnMonster()
     {
 
@@ -168,7 +167,7 @@ public class PunManager : MonoBehaviourPunCallbacks
 
         string _pathName = $"1_Prefab/Monster/Monster_{_preName}";
 
-        object[] _tempData =new object[] {(int)PlayerKind.MONSTER, (int)MapType.MY_HOME ,false};
+        object[] _tempData = new object[] { (int)PlayerKind.MONSTER, (int)MapType.MY_HOME, false };
 
         GameObject _monster = PN.Instantiate(_pathName, _pos, Quaternion.Euler(_rot), 0, null);
         Nplayer _nplayer = _monster.GetComponent<Nplayer>();
@@ -186,7 +185,7 @@ public class PunManager : MonoBehaviourPunCallbacks
     {
         string _preName = "Monster_Boss";
 
-        Vector3 _pos = new Vector3(10, 2f, 10);
+        Vector3 _pos = new Vector3(20, 2f, 30);
         Vector3 _rot = Vector3.zero;
 
         string _pathName = $"1_Prefab/Monster/{_preName}";
