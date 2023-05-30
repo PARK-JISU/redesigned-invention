@@ -17,6 +17,11 @@ public class PunManager : MonoBehaviourPunCallbacks
 
     public byte UserNum = 5;
 
+
+    #region MonsterPool
+    public List<Nplayer> MonsterList = new List<Nplayer>();
+    #endregion
+
     [SerializeField]
     private bool connect = false;
 
@@ -153,7 +158,8 @@ public class PunManager : MonoBehaviourPunCallbacks
     public void SpawnMonsters()
     {
         //IsMasterClient 추가
-        MyRpc.SendTypeRPC((int)RPCType.SPAWN_MONSTER, RpcTarget.AllBuffered);
+        if (IsMasterClient())
+            MyRpc.SendTypeRPC((int)RPCType.SPAWN_MONSTER, RpcTarget.AllBuffered);
         //SpawnMonster();
     }
    
@@ -217,6 +223,42 @@ public class PunManager : MonoBehaviourPunCallbacks
     public void RoomClose()
     {
         PN.CurrentRoom.IsOpen = false;
+    }
+
+    public bool IsMasterClient()
+    {
+        if (MyPlayer == null)
+            return false;
+
+        return MyPlayer.photonView.Owner.IsMasterClient;
+    }
+
+    public void CheckMonsterState()
+    {
+        StartCoroutine(ReSpawnMonster());
+        //for(int i= 0; i < MonsterList.Count; i++)
+        //{
+        //    if(MonsterList[i].IsDead)
+        //    {
+        //        //부활= 활성화
+        //        MonsterList[i].gameObject.SetActive(true);
+        //        MonsterList[i].nPlayerRpc.SendRPC(new object[] { (int)RPCType.RESPAWN_MONSTER, MonsterList[i].photonView.ViewID });
+        //    }
+        //}
+    }
+
+    IEnumerator ReSpawnMonster()
+    {
+        yield return new WaitForSeconds(5f);
+        for (int i = 0; i < MonsterList.Count; i++)
+        {
+            if (MonsterList[i].IsDead)
+            {
+                //부활= 활성화
+                MonsterList[i].gameObject.SetActive(true);
+                MonsterList[i].nPlayerRpc.SendRPC(new object[] { (int)RPCType.RESPAWN_MONSTER, MonsterList[i].photonView.ViewID });
+            }
+        }
     }
 }
 
