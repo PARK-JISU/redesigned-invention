@@ -88,6 +88,11 @@ public class NplayerRPC :MonoBehaviourPun
             case RPCType.ATTACK_MONSTER: CalculateMonsterHPRPC(_rpcData); break;
 
             case RPCType.DEAD:AfterMonsterDeadRPC(_rpcData);break;
+
+            case RPCType.RESPAWN_MONSTER: RespawnMonsterRPC(_rpcData); break;
+
+            case RPCType.ATTACK_PLAYER: AttackPlayerRPC(_rpcData); break;
+
         }
     }
 
@@ -136,27 +141,37 @@ public class NplayerRPC :MonoBehaviourPun
         }
         
 
-        for(int i= 0; i<GameManager.Instance.MonsterList.Count;i++)
+        for(int i= 0; i<PunManager.Instance.MonsterList.Count;i++)
         {
-            if (GameManager.Instance.MonsterList[i].photonView.ViewID == JsonDecode.ToInt(_data[1]))
+            if (PunManager.Instance.MonsterList[i].photonView.ViewID == JsonDecode.ToInt(_data[1]))
             {
-                GameManager.Instance.MonsterList[i].IsDead = true;
+                PunManager.Instance.MonsterList[i].IsDead = true;
+                PunManager.Instance.CheckMonsterState();
             }
         }
+    }
 
-        //GameManager.Instance.RespawnMonster(_data);
-        //for(int j=0;j<GameManager.Instance.MonsterList.Count;j++)
-        //{
-        //   if(GameManager.Instance.MonsterList[j].photonView.ViewID ==JsonDecode.ToInt(_data[1]))
-        //    {
+    void RespawnMonsterRPC(object[] _data)
+    {
+        nPlayer.IsDead = false;
+        Debug.Log($"<color=cyan>{photonView.ViewID}is{nPlayer.IsDead}</color>");
+        nPlayer.AfterMonsterDead();
+    }
 
-        //    }
-        //}
+    //TODO 테스트 매개변수로 데미지도 추가
+    void AttackPlayerRPC(object[] _data)
+    {
+        int _tempPlayerNum = JsonDecode.ToInt(_data[0]);
 
-        //for (int i = 0; i < nPlayer.HitTargets.Count; i++)
-        //{
-        //    Nplayer monster = nPlayer.HitTargets[i].GetComponent<Nplayer>();
-        //    monster.AfterMonsterDead(_data);
-        //}
+        if(PunManager.MyPlayer.photonView.ViewID ==_tempPlayerNum)
+        {
+            PunManager.MyPlayer.HP -= 10;
+            return;
+        }
+        else if(PunManager.Instance.OtherPlayer.ContainsKey(_tempPlayerNum))
+        {
+            PunManager.Instance.OtherPlayer[_tempPlayerNum].HP -= 10;
+        }
+
     }
 }
