@@ -10,7 +10,7 @@ public class CineCam : Singletone<CineCam>
     public CamTargetType CamTargetType { get; private set; }
     private float rotLerpTime;
 
-    private Vector3 OriPos = new Vector3(0,2.3f,-6.6f);
+    private Vector3 OriPos = new Vector3(0,-0.6f,1.1f);
 
 
     private Vector3 oriRotPos;
@@ -197,7 +197,7 @@ public class CineCam : Singletone<CineCam>
 
     void Update()
     {
-       // RotateSet();
-        //Rotate();
+        RotateSet();
+        Rotate();
     }
 }
