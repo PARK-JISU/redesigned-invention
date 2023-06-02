@@ -49,6 +49,8 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
     private NavMeshAgent nvAgent;
     public MonsterState monstate;
     public int MonsterKind { get; set; }
+
+    public GameObject MonsterBody;
     #endregion
     #region Attack
 
@@ -91,14 +93,22 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
     public Image IconQuest;
     public Button BtnQuest;
 
-    [Header("[Player_State]")]
-    public PlayerState playerState;
+    //[Header("[Player_State]")]
+    //public PlayerState playerState;
 
     [Header("DustEff Zone")]
     public Transform DustEffZone;
 
     //TODO 테스트
     public Job job;
+
+    private void Awake()
+    {
+        if(photonView !=null&& photonView.InstantiationData != null)
+        {
+            Init(photonView.InstantiationData);
+        }
+    }
 
     public void Init(object[] _instantiateData)
     {
@@ -110,10 +120,9 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                 object[] _playerData = new object[] { JsonDecode.ToInt(_instantiateData[0]) };
                 nPlayerMove.Init(_playerData);
                 job = (Job)JsonDecode.ToInt(_instantiateData[1]);
-                playerState = (PlayerState)JsonDecode.ToInt(_instantiateData[2]);
+                //playerState = (PlayerState)JsonDecode.ToInt(_instantiateData[2]);
                 GameManager.Instance.SecondTutorialAttackCnt = 0;
-
-
+                
                 SetUtilLoadData();
                 break;
             case PlayerKind.NPC:
@@ -152,6 +161,7 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                 //    case (int)MapType.MONSTERFIELD: MonsterKind = 1002; break;
                 //    case (int)MapType.MAIN_TOWN: MonsterKind = 1003; break;
                 //}
+
                 LEVEL = DataTblMng.Instance.GetMonsterData(MonsterKind).Idx;
                 HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
 
@@ -164,7 +174,6 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                 //StartCoroutine(CheckStateForAction());
                 break;
         }
-
         //TODO 테스트
         transform.localPosition = Vector3.one*2;
 
@@ -179,6 +188,25 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         AttackBlend = 1;
         AttackCool = 0;
 
+        if(photonView !=null &&photonView.IsMine)
+        {
+            if(IsNpc ==false)
+            {
+                name = "MYPlayer";
+
+                PunManager.MyPlayer = this;
+                PunManager.MyRpc = nPlayerRpc;
+
+
+            }
+        }
+        else
+        {
+            if(IsNpc==false)
+            {
+                PunManager.Instance.AddOtherPlayer(this);
+            }
+        }
         //IsDead = false;
 
         ////TODO 테스트
@@ -195,7 +223,11 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         if (GameManager.Instance.nPlayer == null)
             return;
 
+        //변경
         float dist = Vector3.Distance(GameManager.Instance.nPlayer.transform.position,transform.position);
+
+        if (IsDead)
+            return;
 
         if (dist <= AttackDist)
         {
@@ -210,7 +242,7 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
             monstate = MonsterState.IDLE;
         }
 
-       // Debug.Log($"<color=cyan>Name:{this.gameObject.name} monstate:{monstate}</color>");
+   
     }
     void CheckStateForAction()
     {
@@ -219,7 +251,6 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
 
         if (IsDead)
         {
-            //nvAgent.isStopped = true;
             nPlayerMove.SetDestination(transform.position);
             nPlayerMove.SetMonsterAni("Dead");
             return;
@@ -228,13 +259,13 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         switch (monstate)
         {
             case MonsterState.IDLE:
-                //nvAgent.isStopped = true;
                 nvAgent.SetDestination(transform.position);
                 nPlayerMove.SetMonsterAni("Idle");
                 break;
             case MonsterState.TRACE:
-                //nvAgent.isStopped = false;
-                nvAgent.SetDestination(GameManager.Instance.nPlayer.transform.position);
+                //변경
+                nvAgent.SetDestination(HitTargets[0].gameObject.transform.position);
+                //nvAgent.SetDestination(GameManager.Instance.nPlayer.transform.position);
                 nPlayerMove.SetMonsterAni("Trace");
                 break;
             case MonsterState.ATTACK:
@@ -265,22 +296,22 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                 QuestInfoObj.gameObject.SetActive(true);
                 if (photonView != null)
                 {
-                    GameManager.Instance.MonsterList.Add(this);
+                    PunManager.Instance.MonsterList.Add(this);
                 }
                 break;
         }
         playerKind = _kind;
     }
 
-    public void CheckPlayerState(PlayerState _playerState)
-    {
-        if (UserData.Instance.tutorialPass)
-            return;
+    //public void CheckPlayerState(PlayerState _playerState)
+    //{
+    //    if (UserData.Instance.tutorialPass)
+    //        return;
 
-        if (UserData.Instance.StepOfTutorial >= (int)_playerState)
-            playerState = _playerState;
+    //    if (UserData.Instance.StepOfTutorial >= (int)_playerState)
+    //        playerState = _playerState;
 
-    }
+    //}
 
     public void MakeWalkDust()
     {
@@ -319,35 +350,7 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         _gameObject.transform.SetParent(DustEffZone);
         _gameObject.transform.position = transform.position;
     }
-    public void ChangeTutorialState(PlayerState _playerState)
-    {
-        switch (_playerState)
-        {
-            case PlayerState.NONE: _playerState = PlayerState.DOING_FIRST_TUTORIAL; break;
-            case PlayerState.DOING_FIRST_TUTORIAL: _playerState = PlayerState.COMPLETE_FIRST_TUTORIAL; break;
-            case PlayerState.COMPLETE_FIRST_TUTORIAL: 
-                _playerState = PlayerState.DOING_SECOND_TUTORIAL;
-                //GameManager.Instance.SetSecondTutorial();
-                break;
-            case PlayerState.DOING_SECOND_TUTORIAL: _playerState = PlayerState.COMPLETE_SECOND_TUTORIAL; break;
-            case PlayerState.COMPLETE_SECOND_TUTORIAL:
-                _playerState = PlayerState.COMPLETE_ALL_TUTORIAL;
-                //TODO 테스트=> 게임 매니저로 옮기기 
-                for(int i= 0; i< GameManager.Instance.NpcList.Count; i++)
-                {
-                    GameManager.Instance.NpcList.Remove(this);
-                    Destroy(GameManager.Instance.NpcList[i].gameObject);
-                }     
-                break;
-           // case PlayerState.DOING_THIRD_TUTORIAL: _playerState = PlayerState.COMPLETE_THIRD_TUTORIAL; break;
-        }
 
-        playerState = _playerState;
-        //Debug.LogError($"PlayerState :{playerState}");
-        //TODO 테스트 
-        //UserData에 넘겨주기 => 나중에 로드할때 문제 발생을 해결하기 위해
-
-    }
 
     #region UtilManagement
     public void SetUtilLoadData()
@@ -357,9 +360,10 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         EXP = _playerInfo.EXP;
 
         PlayerData _temp = DataTblMng.Instance.GetPlayerLevelData(LEVEL);
-
+      
         HP = _temp.HP;
         MP = _temp.MP;
+        
     }
 
     public void SetUtilDataAfterLevelUp()
@@ -381,81 +385,18 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         float AttackDam = JsonDecode.ToFloat(_data[1]);
         int LasthitPlayerNum = JsonDecode.ToInt(_data[2]);
         HP += AttackDam;
-        PunManager.MyRpc.SendTypeRPC((int)RPCType.SHOW_ATTACK_EFF, RpcTarget.AllBuffered);
+        nPlayerRpc.SendTypeRPC((int)RPCType.SHOW_ATTACK_EFF, RpcTarget.AllBuffered);
 
         if(HP<=0)
         {
             //MonsterState에서 DEAD는 별의미 없음
             object[] _istanceData=new object[] {(int)RPCType.DEAD,(int)MonsterState.DEAD,photonView.ViewID,LasthitPlayerNum };
-            PunManager.MyRpc.SendRPC(_istanceData);
+            nPlayerRpc.SendRPC(_istanceData);
         }
 
 
     }
-    //public void SetUtil(UtilKind _utilKind, float _amount)
-    //{
 
-    //    if (playerKind == PlayerKind.PLAYER)
-    //    {
-    //        switch (_utilKind)
-    //        {
-    //            case UtilKind.HP:
-    //                HP += _amount;
-    //                if (HP >= DataTblMng.Instance.GetPlayerLevelData(LEVEL).HP)
-    //                    HP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).HP;
-    //                else if (HP <= 0)
-    //                {
-    //                    //object[] _data = new object[] { (int)RPCType.DEAD, (int)playerKind };
-    //                    //PunManager.MyRpc.SendRPC(_data);
-    //                    AfterDead(playerKind);
-    //                    //사망 처리
-    //                }
-    //                break;
-    //            case UtilKind.MP:
-    //                MP += _amount;
-    //                if (MP >= DataTblMng.Instance.GetPlayerLevelData(LEVEL).MP)
-    //                    MP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).MP;
-    //                else if (MP <= 0)
-    //                {
-    //                    //MP 회복에 대한 UI
-    //                }
-    //                break;
-    //            case UtilKind.EXP:
-    //                EXP += _amount;
-    //                if (EXP >= DataTblMng.Instance.GetPlayerLevelData(LEVEL).Exp)
-    //                    LevelUP();
-    //                break;
-    //        }
-    //    }
-    //    else if (playerKind == PlayerKind.MONSTER)
-    //    {
-    //        switch (_utilKind)
-    //        {
-    //            case UtilKind.HP:
-    //                PunManager.MyRpc.SendTypeRPC((int)RPCType.SHOW_ATTACK_EFF, RpcTarget.AllBuffered);
-    //                //MakeAttackEff();
-    //                HP += _amount;
-    //                //HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
-    //                if (HP <= 0)
-    //                {
-    //                    IsDead = true;
-    //                    monstate = MonsterState.DEAD;
-    //                    GameManager.Instance.nPlayer.EXP += DataTblMng.Instance.GetMonsterData(MonsterKind).Exp;
-    //                    //Debug.LogError($"GameManager.instance.nPlayer.EXP: {GameManager.Instance.nPlayer.EXP}");
-    //                    Debug.Log($"<color=cyan>GameManager.instance.nPlayer.EXP: {GameManager.Instance.nPlayer.EXP}</color>");
-    //                    //TODO 테스트 변경안
-    //                    //몬스터 사망 모션 
-    //                    //object[] _data = new object[] { (int)RPCType.DEAD, (int)playerKind };
-    //                    //PunManager.MyRpc.SendRPC(_data);
-    //                    AfterDead(playerKind);
-    //                    //사망 처리
-    //                }
-    //                break;
-    //        }
-    //    }
-
-
-    //}
     public void LevelUP()
     {
         if (!photonView.IsMine)
@@ -464,17 +405,9 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         //TODO 테스트 
         LEVEL++;
         SetUtilDataAfterLevelUp();
-
-        //Userdata에 넣는다??
-        // GameManager.Instance.SetPlayerInfo();
-        // UserData.Instance.SetUserData(DataTblMng.Instance.GetPlayerLevelData(LEVEL));
     }
 
-    //TODO 테스트 
-    //public void IncreaseMp()
-    //{
-    //    SetUtil(UtilKind.MP,0.1f);
-    //}
+ 
     #endregion
     #region MonAttack
     public void MonAttack()
@@ -484,6 +417,9 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
         {
             Nplayer nplayer = HitTargets[i].GetComponent<Nplayer>();
             Debug.Log($"<color=red>MonsterDam:{monData.AttackDam}</color>");
+
+            //데미지 추가
+            nPlayerRpc.SendRPC(new object[] {(int)RPCType.ATTACK_PLAYER,nplayer.photonView.ViewID });
             //nplayer.SetUtil(UtilKind.HP, -monData.AttackDam);
         }
     }
@@ -503,14 +439,6 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
 
             if (CanAttack && IsNpc == false)
             {
-                //공격시 자리 정지
-                nPlayerMove.SetDestination(transform.position);
-
-                //if(/*nPlayer.CheckFirstTutorial()*/GameManager.Instance.CheckFirstTutorialClear())
-                // {
-                //TODO 테스트
-                //AttackBlend++;
-
                 //TODO 테스트 AttackBlend가 1,2,3 일때의 +1값을 변경하라
                 //ex)1일때는 0.9f 이런식
                 float _temp = AttackBlend + 1;
@@ -539,13 +467,9 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                     {
                         PunManager.MyRpc.SendRPC(new object[] {(int)RPCType.ATTACK_MONSTER, nplayer.photonView.ViewID, -playerData.AttackDam,photonView.ViewID/*마지막을친 플레이어의 photonviw */});
                         Debug.Log($"<color=yellow>Target[{ nplayer.photonView.ViewID}] is UnderAttack \n Target[{ nplayer.photonView.ViewID}].HP :{nplayer.HP}</color>");
-                        // nplayer.SetUtil(UtilKind.HP, -playerData.AttackDam);
+                     
                     }
                     
-                    //이름을 바꾸던 함수를 만들던 => 일단 확인용
-                    //nplayer.SetUtil(UtilKind.HP, -playerData.AttackDam);
-                    //Debug.Log($"<color=red>Target[{i}] is UnderAttack \n Target[{i}].HP :{nplayer.HP}</color>");
-                    //nplayer.HP -= 5;
                 }
                 StartCoroutine(CheckAttackTIme(AttackCool));
 
@@ -555,26 +479,9 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
                 //TODO 테스트
                 CanAttack = false;
 
-                //nPlayerRpc.SendRPC(new object[] {(int)RPCType.NONE});
-
-                //TODO 테스트
-                //switch (nPlayer.job)
-                //{
-                //    case Job.NONE: AttackCool = 1.3f; break;
-                //    case Job.WIZARD:AttackCool = 1f; break;
-                //    case Job.HOKE: AttackCool = 1.1f; break;
-                //    case Job.WORRIOR: AttackCool = 0.8f; break;
-                //}
-
-                //TODO 테스트 
-                //CineCam.Instance.ShakeCam();
 
 
-                //AttackSt = AttackSt.ATTACK;
-                //TODO 테스트
-                //if (GameManager.Instance.CheckFirstTutorialClear())
-                //    GameManager.Instance.SecondTutorialAttackCnt++;
-                //   }
+           
             }
 
         }
@@ -600,7 +507,7 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
             {
                 if(photonView.IsMine)
                 {
-                    nPlayerMove.StopNavMeshAgent();
+                    //nPlayerMove.StopNavMeshAgent();
                 }
             }
           
@@ -611,72 +518,22 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
     #region AfterDead
     public void AfterMonsterDead()
     {
-        StartCoroutine(Respawn(5f));
-        //GameManager.Instance.CheckMonsterIsServive(this);
-
-        //switch (_type)
-        //{
-        //    case (int)PlayerKind.PLAYER:
-        //        HP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).HP;
-        //        MP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).MP;
-        //        break;
-        //    case (int)PlayerKind.MONSTER:
-        //        //TODO 테스트 : 몬스터 정보가져오기
-              
-        //        //startcoroutine 순서 바꿔서 넣어주기
-        //        //this.gameObject.SetActive(false);
-        //        //HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
-        //        //StartCoroutine(RespawnMon());
-        //        break;
-        //}
+        StartCoroutine(Respawn(2f));
     }
     IEnumerator Respawn(float _time)
     {
-        //yield return new WaitForSeconds(2f);
-        //gameObject.SetActive(false);
-
         yield return new WaitForSeconds(_time);
-        IsDead = false;
         initMonsterInfo();
 
         
     }
 
-    //public void AfterDead(PlayerKind _kind)
-    //{
-    //    //int _type = JsonDecode.ToInt(_data[0]);
-
-    //    Debug.Log($"<color=red>Died</color>");
-    //    switch (_kind)
-    //    {
-    //        case PlayerKind.PLAYER:
-    //            HP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).HP;
-    //            MP = DataTblMng.Instance.GetPlayerLevelData(LEVEL).MP;
-    //            break;
-    //        case PlayerKind.MONSTER:
-    //            //TODO 테스트 : 몬스터 정보가져오기
-    //            GameManager.Instance.CheckMonsterIsServive(this);
-    //            //startcoroutine 순서 바꿔서 넣어주기
-    //            //this.gameObject.SetActive(false);
-    //            HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
-    //            //StartCoroutine(RespawnMon());
-    //            break;
-    //    }
-
-    //}
-
-    //TODO RPC쏘기
-    IEnumerator RespawnMon()
-    {
-        yield return new WaitForSeconds(10f);
-        Debug.Log($"<color=blue>Respawned</color>");
-        this.gameObject.SetActive(true);
-    }
-
     public void initMonsterInfo()
     {
-        Debug.LogError(MonsterKind);
+        IsDead = false;
+        MonsterBody.gameObject.SetActive(true);
         HP = DataTblMng.Instance.GetMonsterData(MonsterKind).HP;
+        Debug.Log($"<color=green>{HP}</color>");
     }
     #endregion
 
@@ -710,7 +567,6 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
 
         CheckSkill();
 
-        //IncreaseMp();
         SerializeTransform();
         canvas.transform.LookAt(CineCam.Instance.CineCamera.transform);
     }
@@ -793,119 +649,4 @@ public class Nplayer : MonoBehaviourPunCallbacks, IPunObservable
             }
         }
     }
-
-    #region Trash
-    //TODO TEST
-    //변경 요망 
-    //public void GetTarget()
-    //{
-    //    HitTargets.Clear();
-    //    Collider[] TargetCollider = Physics.OverlapSphere(transform.position, viewRadious, targetMask);
-
-    //    for(int i= 0; i < TargetCollider.Length; i++)
-    //    {
-    //        Transform target = TargetCollider[i].transform;
-    //        Vector3 direction = target.position - transform.position;
-    //        if(Vector3.Dot(direction.normalized, transform.forward)> GetAngle(viewAngle/2).z)
-    //        {
-    //            //if (Targets.Contains(target.gameObject))
-    //            //    return;
-
-    //            HitTargets.Add(target.gameObject);
-    //        }
-    //    }
-    //}
-
-    //private Vector3 GetAngle(float AngleInDegree)
-    //{
-    //    return new Vector3(Mathf.Sin(AngleInDegree * Mathf.Deg2Rad), 0, Mathf.Cos(AngleInDegree * Mathf.Deg2Rad));
-    //}
-    //private void OnDrawGizmos()
-    //{
-    //    Handles.DrawWireArc(transform.position, Vector3.up, transform.position, 360, viewRadious);
-    //    Handles.DrawLine(transform.position, transform.position + GetAngle(-viewAngle / 2) * viewRadious);
-    //    Handles.DrawLine(transform.position, transform.position + GetAngle(viewAngle / 2) * viewRadious);
-
-    //    foreach(GameObject Target in HitTargets)
-    //    {
-    //        Handles.DrawLine(transform.position, Target.transform.position);
-    //    }
-    //}
-    //TODO TEST
-    //public Vector3 DirFromAngle(float angleInDegrees)
-    //{
-    //    return new Vector3(Mathf.Sin(angleInDegrees * Mathf.Deg2Rad), 0, Mathf.Cos(angleInDegrees * Mathf.Deg2Rad));
-    //}
-    //public void FindTargets()
-    //{
-    //    Collider[] targetInViewRadius = Physics.OverlapSphere(transform.position, viewRadious, targetMask);
-
-    //    for(int i= 0; i < targetInViewRadius.Length; i++)
-    //    {
-    //        Transform target = targetInViewRadius[i].transform;
-    //        Vector3 dirToTarget = (target.position - transform.position).normalized;
-
-    //        if(Vector3.Angle(transform.forward, dirToTarget)< viewAngle/2)
-    //        {
-    //            float dstToTarget = Vector3.Distance(transform.position, target.position);
-
-    //            if(!Physics.Raycast(transform.position,dirToTarget,dstToTarget,obstacleMask))
-    //            {
-    //                Debug.DrawRay(transform.position, dirToTarget * 10f, Color.red, 5f);
-    //            }
-    //        }
-    //    }
-    //}
-
-
-    //TODO 테스트 
-    //IEnumerator CheckState()
-    //{
-    //    while (!IsDead)
-    //    {
-    //        yield return new WaitForSeconds(0.2f);
-
-    //        if (GameManager.Instance.nPlayer == null)
-    //            break;
-
-    //        float dist = Vector3.Distance(GameManager.Instance.nPlayer.transform.position, this.transform.position);
-
-    //        if (dist <= AttackDist)
-    //        {
-    //            monstate = MonsterState.ATTACK;
-    //        }
-    //        else if (dist <= traceDist)
-    //        {
-    //            monstate = MonsterState.TRACE;
-    //        }
-    //        else
-    //        {
-    //            monstate = MonsterState.IDLE;
-    //        }
-    //    }
-    //}
-    ////TODO 테스트
-    //IEnumerator CheckStateForAction()
-    //{
-    //    while (!IsDead)
-    //    {
-    //        switch (monstate)
-    //        {
-    //            case MonsterState.IDLE:
-    //                nvAgent.Stop();
-    //                nPlayerMove.SetMonsterAni($"{monstate}");
-    //                break;
-    //            case MonsterState.TRACE:
-    //                nvAgent.destination = GameManager.Instance.nPlayer.transform.position;
-    //                nvAgent.Resume();
-    //                nPlayerMove.SetMonsterAni($"{monstate}");
-    //                break;
-    //            case MonsterState.ATTACK:
-    //                nPlayerMove.SetMonsterAni($"{monstate}");
-    //                break;
-    //        }
-    //    }
-    //    yield return null;
-    //}
-    #endregion
 }
