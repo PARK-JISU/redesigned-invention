@@ -14,4 +14,15 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 소환한 오브젝트에 데이터를 추가해서 구동시켜야하는 상황에서(플레이어,몬스터 등 동적 오브젝트),Object형태로 데이터를 넘겨서 Awake구문에서 사용하게 만든다.
 -이번에 변경한 Nplayer에 있음
+=========================================================================================
+
+기획하던 게임에서 첫 씬의 시작을 바꾸기로 했다.
+
+1.게임을 들어갔을 때, PhotonNetwork의 Lobby에 접속한다.
+2.로비로 접속했을 때, 방 List가 있는지 확인한다.
+  만약 없을 경우 혹은 방을 만들고 싶을 경우,Void CreateRoom이라는 함수를 제작하여 방을 만들고
+  Photon의 UpdateRoomList를 통해 방을 소환만들어서 보여준다(단 UpdateRoomList는 Lobby에 들어갈때 구동되는 함수로 방을 추가적으로 다시 만들고 싶으면 프로세스 마지막에 Leave Room을 선언한다.)
+3.Button을 ListItem으로 만들어서 Instatiate하게 하여 하나의 지점에 VerticalLayOutGrounp을 설정하여 보여준다.
+4.Button형태로 ListItem을 만들고 소환까지 했다면 버튼을 클릭하였을 때, 액션(씬 전환이나 혹은 방에 입장)을 구동시킨다.
+
 
