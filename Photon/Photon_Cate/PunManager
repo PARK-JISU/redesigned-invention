@@ -8,6 +8,8 @@ using Photon.Pun;
 using Photon.Realtime;
 using PN = Photon.Pun.PhotonNetwork;
 
+public delegate void defaultdel();
+
 public class PhotonManager : MonoBehaviourPunCallbacks
 {
     public static PhotonManager Instance;
@@ -21,6 +23,12 @@ public class PhotonManager : MonoBehaviourPunCallbacks
 
     [Header("[Room Option]")]
     public InputField RoomOptionInputField;
+
+    [Header("[Room LIstItem Grid]")]
+    public RectTransform RoomListGrid;
+
+    [Header("[Room List Item]")]
+    public GameObject RoomListItem;
     #endregion
 
 
@@ -34,7 +42,7 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     {
         AppSettings _pnAppSettings = PN.PhotonServerSettings.AppSettings;
 
-        _pnAppSettings.AppIdRealtime = "*******-adcc-41bb-****-9e9962fe898a";
+        _pnAppSettings.AppIdRealtime = "8c42ded6-adcc-41bb-b45c-9e9962fe898a";
 
         _pnAppSettings.UseNameServer = true;
         _pnAppSettings.EnableProtocolFallback = true;
@@ -67,6 +75,7 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     public override void OnConnectedToMaster()
     {
         Debug.Log("<color=red>Connecting Server Is Complete</color>");
+        PN.JoinLobby();
     }
 
     public void Disconnect()
@@ -136,18 +145,23 @@ public class PhotonManager : MonoBehaviourPunCallbacks
         }
 
         byte _temp = byte.Parse(RoomOptionInputField.text);
-        PN.CreateRoom(RoomNameInputField.text,new RoomOptions {MaxPlayers = _temp});
+        PN.CreateRoom(RoomNameInputField.text,new RoomOptions {MaxPlayers = _temp,IsOpen = true, IsVisible = true,CleanupCacheOnLeave= true});
     }
 
     public override void OnCreatedRoom()
     {
         Debug.Log("<color=red>Success to Create the Room</color>");
+        PN.LeaveRoom();
     }
 
     //Lobby에 접속하면 CallBack 되는 함수
     public override void OnRoomListUpdate(List<RoomInfo> roomList)
     {
-        Debug.LogError("W");
+        Debug.LogError(roomList.Count);
+       for(int i=0; i< roomList.Count; i++)
+        {
+           Instantiate(RoomListItem, RoomListGrid.transform).GetComponent<RoomListItem>().SetRoomInfo(roomList[i].Name);
+        }
     }
     
 
@@ -166,6 +180,17 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     {
         Debug.Log("<color=red>Success to left the Room</color>");
     }
+
+    public void JoinedRoom(string _roomName)
+    {
+        PN.JoinRoom(_roomName);
+    }
+
+    public override void OnJoinedRoom()
+    {
+        Debug.Log("<color=red>Success to join room</color>");
+    }
+
     #region OnClickEvent
     public void OnClickConnectServer()
     {
