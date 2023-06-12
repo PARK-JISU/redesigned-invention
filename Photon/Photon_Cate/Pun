@@ -34,7 +34,7 @@ public class PhotonManager : MonoBehaviourPunCallbacks
     {
         AppSettings _pnAppSettings = PN.PhotonServerSettings.AppSettings;
 
-        _pnAppSettings.AppIdRealtime = "8c42ded6-adcc-41bb-b45c-9e9962fe898a";
+        _pnAppSettings.AppIdRealtime = "*******-adcc-41bb-****-9e9962fe898a";
 
         _pnAppSettings.UseNameServer = true;
         _pnAppSettings.EnableProtocolFallback = true;
