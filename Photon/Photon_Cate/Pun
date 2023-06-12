@@ -1,46 +1,41 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using CodeStage.AntiCheat.ObscuredTypes;
+using UnityEngine.UI;
+
 
 using Photon.Pun;
 using Photon.Realtime;
 using PN = Photon.Pun.PhotonNetwork;
-using Newtonsoft.Json;
-//SceneChgLoadObjWaitCnt
-public class PunManager : MonoBehaviourPunCallbacks
+
+public class PhotonManager : MonoBehaviourPunCallbacks
 {
-    public static PunManager Instance;
-    public  static Nplayer MyPlayer { get; set; }
-    public static NplayerRPC MyRpc { get; set; }
-    public Dictionary<int, Nplayer> OtherPlayer { get; set; }
+    public static PhotonManager Instance;
 
-    public byte UserNum = 5;
+    #region UI
+    [Header("[UI_State]")]
+    public Text StateUI;
 
+    [Header("[UI_InputField]")]
+    public InputField RoomNameInputField;
 
-    #region MonsterPool
-    public List<Nplayer> MonsterList = new List<Nplayer>();
+    [Header("[Room Option]")]
+    public InputField RoomOptionInputField;
     #endregion
 
-    [SerializeField]
-    private bool connect = false;
 
     private void Awake()
     {
         Instance = this;
         PhotonServerSetting();
     }
-    private void Start()
-    {
-        //게임 시작전 플레이어의 정보 Load
-        GameManager.Instance.LoadUserData();
-    }
 
-    public void PhotonServerSetting()
+    private void PhotonServerSetting()
     {
         AppSettings _pnAppSettings = PN.PhotonServerSettings.AppSettings;
 
         _pnAppSettings.AppIdRealtime = "8c42ded6-adcc-41bb-b45c-9e9962fe898a";
+
         _pnAppSettings.UseNameServer = true;
         _pnAppSettings.EnableProtocolFallback = true;
 
@@ -51,22 +46,27 @@ public class PunManager : MonoBehaviourPunCallbacks
         _pnAppSettings.FixedRegion = "kr";
 
         PN.PhotonServerSettings.DevRegion = string.Empty;
-
-        Debug.Log("<color=red>PhotonServerSetting is Complete</color>");
-
-        Connect();
+        Debug.Log("<color=yellow>PhotonServerSetting Is Complete!!!!</color>");
+        StateUI.text = $"<color=cyan>Photon Server Setting State</color>\n\n\n\n" +
+                       $"<color=white>AppIdRealtime</color> :{_pnAppSettings.AppIdRealtime}\n\n" +
+                       $"<color=white>UseNameServer</color> :{_pnAppSettings.UseNameServer}\n\n" +
+                       $"<color=white>AppVersion</color> :{_pnAppSettings.AppVersion}\n\n" +
+                       $"<color=white>FixedRegion</color> :{_pnAppSettings.FixedRegion}\n\n";
     }
 
-    public void Connect()
+    public void ConnectServer()
     {
+        if(PN.IsConnected)
+        {
+            Debug.Log("<color=red>You are already Connected to Server</color>");
+            return;
+        }
         PN.ConnectUsingSettings();
     }
 
     public override void OnConnectedToMaster()
     {
         Debug.Log("<color=red>Connecting Server Is Complete</color>");
-        connect = true;
-        PN.JoinLobby();
     }
 
     public void Disconnect()
@@ -79,211 +79,120 @@ public class PunManager : MonoBehaviourPunCallbacks
         Debug.Log("<color=red>Disconnecting Server Is Complete</color>");
     }
 
-    public override void OnJoinedLobby()
+    public void JoinLobby()
     {
-        if (connect)
+        if (!PN.IsConnected)
         {
-            Debug.Log($"<color=red>Complete To Join Lobby</color>");
+            Debug.Log("<color=red>You have to Connect Server,Please Complete to Connect Server</color>");
+            return;
         }
-            //JoinMyHome();
+        PN.JoinLobby();
     }
 
-    public void OnCreateRoom(string _name)
+    public override void OnJoinedLobby()
     {
-        RoomOptions roomOptions = new RoomOptions();
-        roomOptions.MaxPlayers = 4;
+        Debug.Log("<color=red>Success to Enter the Lobby</color>");
+    }
 
-        PN.CreateRoom(_name,roomOptions);
+    public void LeaveLobby()
+    {
+        if(!PN.InLobby)
+        {
+            Debug.Log("<color=red>You are not Lobby, Please Check</color>");
+            return;
+        }
+        PN.LeaveLobby();
+    }
+
+    public override void OnLeftLobby()
+    {
+        Debug.Log("<color=red>Success to Leave the Lobby</color>");
+    }
+
+    public void CreateRoom()
+    {
+        if(!PN.IsConnected)
+        {
+            Debug.Log("<color=red>If you want to make room, Please check Connecting the Server State</color>");
+            return;
+        }
+
+        if(!PN.InLobby)
+        {
+            Debug.Log("<color=red>If you want to make room, Please check are you Lobby</color>");
+            return;
+        }
+
+        if(string.IsNullOrEmpty(RoomNameInputField.text))
+        {
+            Debug.Log("<color=yellow>You have to Write 'Room Name'</color>");
+            return;
+        }
+
+        if(string.IsNullOrEmpty(RoomOptionInputField.text))
+        {
+            Debug.Log("<color=yellow>you didn't set RoomOption[MaxPlayers]</color>");
+            return;
+        }
+
+        byte _temp = byte.Parse(RoomOptionInputField.text);
+        PN.CreateRoom(RoomNameInputField.text,new RoomOptions {MaxPlayers = _temp});
     }
 
     public override void OnCreatedRoom()
     {
-        Debug.Log($"<color=cyan>====OnCreatedRoom() </color>");
-        //방을 여러개 만들기 위해서
-        //PN.LeaveRoom();
+        Debug.Log("<color=red>Success to Create the Room</color>");
     }
 
+    //Lobby에 접속하면 CallBack 되는 함수
     public override void OnRoomListUpdate(List<RoomInfo> roomList)
     {
-        UITitle.Instance.UpdateRoomList(roomList);
+        Debug.LogError("W");
     }
+    
 
-    public void JoinRoom(string _name)
+    public void LeaveRoom()
     {
-        PN.JoinRoom(_name);
-       
-    }
-
-    public override void OnJoinedRoom()
-    {
-        Debug.Log($"<color=cyan>==== OnJoinedRoom() roomname :{PN.CurrentRoom.Name}</color>");
-        PN.LoadLevel("MY_HOME");
-
-       
-        //mapinfo 에 있는거 사용해서 플레이어 소환
-        ////플레이어 소환
-        //Debug.LogError("Game Start");
-    }
-
-    public void JoinMyHome()
-    {
-        byte _maxPlayers = UserNum;
-        string _islandName = $"MY_HOME_{UserNum}";
-        PN.JoinOrCreateRoom(_islandName, new RoomOptions { MaxPlayers = _maxPlayers },null);
-        //StartCoroutine(UITitle.Instance.LoadSceneProcess());
-
-        object[] _data = new object[] { (int)MapType.MY_HOME };
-        MapManager.Instance.Init(_data);
-    }
-
-   
-
-    public override void OnJoinRandomFailed(short returnCode, string message)
-    {
-        //JoinMyHome();
-    }
-
-    public void CheckCurrentRoomFirstPlayer()
-    {
-        SpawnPlayer();
-    }
-
-    //Addressable로 소환.몬스터도 또한
-    Nplayer SpawnPlayer()
-    {
-        string _prefabName = "Player";
-
-        Vector3 _pos = new Vector3(10, 160f, 10);
-        Vector3 _rot = Vector3.zero;
-
-        string _pathName = $"1_Prefab/Player/Player/{_prefabName}";
-
-        object[] _tempData = new object[] { (int)PlayerKind.PLAYER, (int)UserData.Instance.job/*, (int)PlayerState.NONE */};
-        Debug.Log($"<color=red>SpawnPlayer</color>");
-        //해결하기
-        PN.InstantiateAsset(_pathName, _pos, Quaternion.Euler(_rot), 0, _tempData, SpawnPlayerComplete);
-       
-        return null;
-    }
-
-    void SpawnPlayerComplete(GameObject _gameObject)
-    {
-        MyPlayer = _gameObject.GetComponent<Nplayer>();
-        Debug.Log($"<color=red>SpawnPlayerComplete</color>");
-        CurrentRoomFistPlayerToLoadObj(MyPlayer);
-    }
-
-    public void CurrentRoomFistPlayerToLoadObj(Nplayer _nPlayer)
-    {
-        if (_nPlayer != null && _nPlayer.photonView)
-            UIManager.Instance.LoadDefaultUI();
-    }
-
-    public void AddOtherPlayer(Nplayer _nplayer)
-    {
-        if (OtherPlayer.ContainsKey(_nplayer.photonView.ViewID) == false)
+        if(!PN.InRoom)
         {
-            OtherPlayer.Add(_nplayer.photonView.ViewID, _nplayer);
+            Debug.Log("<color=red>You are not Room, Please sure that you are room</color>");
+            return;
         }
+
+        PN.LeaveRoom();
     }
-    public void SpawnMonsters()
+
+    public override void OnLeftRoom()
     {
-        //IsMasterClient 추가
-        if (IsMasterClient())
-            MyRpc.SendTypeRPC((int)RPCType.SPAWN_MONSTER, RpcTarget.AllBuffered);
-        //SpawnMonster();
+        Debug.Log("<color=red>Success to left the Room</color>");
     }
-   
-    public Nplayer SpawnMonster()
+    #region OnClickEvent
+    public void OnClickConnectServer()
     {
-
-        string _preName = MapManager.Instance.mapType.ToString();
-
-        Vector3 _pos = new Vector3(Random.Range(-5, 5), 2f, Random.Range(-5, 5));
-        Vector3 _rot = Vector3.zero;
-
-        string _pathName = $"1_Prefab/Monster/Monster_{_preName}";
-
-        object[] _tempData = new object[] { (int)PlayerKind.MONSTER, (int)MapType.MY_HOME, false };
-
-        GameObject _monster = PN.Instantiate(_pathName, _pos, Quaternion.Euler(_rot), 0, null);
-        Nplayer _nplayer = _monster.GetComponent<Nplayer>();
-
-        _nplayer.Init(_tempData);
-        return null;
+        ConnectServer();
     }
 
-    public void SpawnBossMonster()
+    public void OnClickDisConnectServer()
     {
-        if (IsMasterClient())
-            MyRpc.SendTypeRPC((int)RPCType.SPAWN_BOSS_MONSTER, RpcTarget.AllBuffered);
+        Disconnect();
     }
-
-    public Nplayer SpwawnBossMonster()
+    public void OnClickJoinLobby()
     {
-        string _preName = "Monster_Boss";
-
-        Vector3 _pos = new Vector3(20, 2f, 30);
-        Vector3 _rot = Vector3.zero;
-
-        string _pathName = $"1_Prefab/Monster/{_preName}";
-
-        object[] _temmpData = new object[] { (int)PlayerKind.MONSTER, (int)MapType.MY_HOME, true };
-        GameObject _bossMonster = PN.Instantiate(_pathName, _pos, Quaternion.Euler(_rot), 0, null);
-        Nplayer _nplayer = _bossMonster.GetComponent<Nplayer>();
-
-        _nplayer.Init(_temmpData);
-
-        return null;
+        JoinLobby();
     }
-    public Room CurrentRoom
+    public void OnClickLeaveLobby()
     {
-        get
-        {
-            return PN.CurrentRoom;
-        }
+        LeaveLobby();
     }
 
-    public int PlayerCnt()
+    public void OnClickCreateRoom()
     {
-        if (PN.CurrentRoom == null)
-            return 0;
-
-        return PN.CurrentRoom.PlayerCount;
+        CreateRoom();
     }
 
-    public void RoomClose()
+    public void OnClickLeaveRoom()
     {
-        PN.CurrentRoom.IsOpen = false;
+        LeaveRoom();
     }
-
-    public bool IsMasterClient()
-    {
-        if (MyPlayer == null)
-            return false;
-
-        return MyPlayer.photonView.Owner.IsMasterClient;
-    }
-
-    public void CheckMonsterState()
-    {
-        StartCoroutine(ReSpawnMonster());
-    }
-
-    IEnumerator ReSpawnMonster()
-    {
-        yield return new WaitForSeconds(5f);
-        for (int i = 0; i < MonsterList.Count; i++)
-        {
-            if (MonsterList[i].IsDead)
-            {
-                //부활= 활성화
-                MonsterList[i].gameObject.SetActive(true);
-                MonsterList[i].MonsterBody.SetActive(false);
-                MonsterList[i].nPlayerRpc.SendRPC(new object[] { (int)RPCType.RESPAWN_MONSTER, MonsterList[i].photonView.ViewID });
-            }
-        }
-    }
+    #endregion
 }
-
-
