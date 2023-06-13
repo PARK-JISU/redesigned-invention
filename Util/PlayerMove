@@ -1,0 +1,43 @@
+게임 상에서 플레이어의 부드러운 움직임 구동
+
+
+
+void DefaultMove()
+{
+   float _v= 0;
+   float _h= 0;
+   
+   _v = Input.GetAxis("Vertical");
+   _h = Input.GetAxis("Horizontal");
+   
+   if(Input.Getkey(KeyCode.LeftShift))
+   {
+       _v *= RunScale;
+       _h *= RunScale;
+   }
+   
+   currentV = Mathf.Lerp(currentV,_v, Time.deltaTime * Interpolation);
+   currentH = Mathf.Lerp(currentH,_h, Time.deltaTime * Interpolation);
+   
+   Vector3 _direction = 카메라의 위치.forward * currentV + 카메라의 위치.right * currentH;
+   
+   float _directionLength = _direction.magnitude;
+   _direction.y = 0;
+   _direction = _direction.normalized * _directionLength;
+   
+   if(_direction != Vector3.zero)
+   {
+     currentDirection = Vector3.Slerp(currentDirection, _direction, Time.deltaTime * Interporation);
+     
+     transform.rotation = Quaternion.LookRotation(currentDirection);
+     moveDirection = new Vector3(currentDirection.x, moveDirection.y, currentDirection.z);
+   }
+   
+   if(charController.enabled)
+   {
+     charController.Move(moveDirection * moveSpeed * Time.deltaTime);
+   }
+
+}
+
+Update에 집어 넣으면 움직임 구동 가능
