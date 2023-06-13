@@ -20,8 +20,10 @@ void DefaultMove()
    Vector3 _direction = 카메라의 위치.forward * currentV + 카메라의 위치.right * currentH;
    
    float _directionLength = _direction.magnitude;
+   [vector3값을 float 값으로 변환하여 length로 표기]
    _direction.y = 0;
    _direction = _direction.normalized * _directionLength;
+   [1의 크기로 만든 방향벡터에 길이 값을 곱하여 diection 재 정의]
    
    if(_direction != Vector3.zero)
    {
@@ -30,6 +32,8 @@ void DefaultMove()
      transform.rotation = Quaternion.LookRotation(currentDirection);
      moveDirection = new Vector3(currentDirection.x, moveDirection.y, currentDirection.z);
    }
+   
+   //저의 경우 animation을 구동할때 blendTree를 사용해서 Parameter값을 주기위해 direction에 대한 값을 지속적으로 연산함
    
    if(charController.enabled)
    {
