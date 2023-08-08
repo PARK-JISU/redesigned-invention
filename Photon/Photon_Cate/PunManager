@@ -21,7 +21,7 @@ public enum IslandType
     FOREST_SILENCE = 3,
     MY_HOME = 4,
     CAMPING = 5,
-    CHO_SEOK_TOWN = 6,
+  
     ISLAND_CENTER = 7,
    // BATTLE_ROYAL_SNOW_FIGHT=8,
 
@@ -303,7 +303,7 @@ public class PunManager : MonoBehaviourPunCallbacks
             case IslandType.FOREST_SILENCE:
             case IslandType.CAMPING:
             case IslandType.ISLAND_CENTER:
-//            case IslandType.CHO_SEOK_TOWN:
+
                 _roomName = CurrentRoom.Name;
                 break;
         }
@@ -421,7 +421,7 @@ public class PunManager : MonoBehaviourPunCallbacks
             case IslandType.AQUARIUM: PN.LoadLevel("Aquarium"); break;
             case IslandType.FOREST_SILENCE: PN.LoadLevel("ForestSilence"); break;
             case IslandType.MY_HOME: PN.LoadLevel("MyHome"); break;
-            case IslandType.CHO_SEOK_TOWN: PN.LoadLevel("ChoSeokTown"); break;
+          
             case IslandType.BATTLE_ROYAL: PN.LoadLevel("BattleRoyal"); break;
 
             case IslandType.CAMPING:
@@ -451,8 +451,7 @@ public class PunManager : MonoBehaviourPunCallbacks
                     JoinForestSilence();
                 else if (IslandType == IslandType.CAMPING)
                     JoinCamping();
-                else if (IslandType == IslandType.CHO_SEOK_TOWN)
-                    JoinChoSeokTown();
+            
                 else if (IslandType == IslandType.ISLAND_CENTER)
                     JoinIslandCenter();
                 break;
@@ -737,32 +736,16 @@ public class PunManager : MonoBehaviourPunCallbacks
                 break;
 
             case IslandType.BATTLE_ROYAL:
-            case IslandType.CHO_SEOK_TOWN:
-                IslandSceneLoadComplete();
-
-                //if (CurrentRoom.PlayerCount <= 1)
-                if (IsMasterClient())
-                {
-                    string _msg = $"{(int)MiniGameManager.Instance.MiniGameType}|{(int)MiniGameManager.Instance.MiniGameKind}|{PN.Time}";
-                    ChattingManager.Instance.SendChatMsg(ChatMsgType.ALERT_GAME_INVITE, "", _msg);
-
-//                    MyDebug.LogError("==== ChatMsg startTime : " + PN.Time);
-
-                    MyRPC.BRPlayerWait();
-                }
-                break;
-
+           
             case IslandType.ISLAND_PLAYER:
             case IslandType.FOREST_SILENCE:
             case IslandType.MY_HOME:
             case IslandType.CAMPING:
-//            case IslandType.CHO_SEOK_TOWN:
+
                 LoadInstalledDecoItemAll();
                 break;
 
-            //case IslandType.CHO_SEOK_TOWN:
-            //    miniGamePlayerConnectCheckDel = CheckMiniGamePlayerConnect;
-            //    break;
+         
         }
     }
 
@@ -864,9 +847,7 @@ public class PunManager : MonoBehaviourPunCallbacks
             case IslandType.ISLAND_PLAYER:
             case IslandType.ISLAND_CENTER:
             case IslandType.FOREST_SILENCE:
-            case IslandType.CHO_SEOK_TOWN:
-                _path = string.Format(TextData.StrFormat[0], "Prefabs/Obj/Interior", _itemData.RscName);
-                break;
+       
             case IslandType.MY_HOME:
                 _path = string.Format(TextData.StrFormat[0], "Prefabs/Obj/Interior_home", _itemData.RscName);
                 break;
@@ -1132,15 +1113,7 @@ public class PunManager : MonoBehaviourPunCallbacks
                             }
                             break;
 
-                        case MiniGameKind.AEBONG_AVOID:
-                            {
-                                float _x = Random.Range(-4.5f, 4.5f);
-                                float _z = Random.Range(-4.5f, 4.5f);
-
-                                _pos = new Vector3(_x, 17f, _z);
-                                _rot = new Vector3(0, Random.Range(0f, 356f), 0);
-                            }
-                            break;
+                       
                     }
                 }
                 break;
@@ -1169,21 +1142,6 @@ public class PunManager : MonoBehaviourPunCallbacks
                 // 테스트 끝
                 break;
 
-            case IslandType.CHO_SEOK_TOWN:
-                ChoSeokTownMapSet _choSeokTownMapSet = ChoSeokTownMapInfo.Instance.ChoSeokTownMapSet;
-                if (_choSeokTownMapSet != null)
-                {
-                    _pos = _choSeokTownMapSet.StartPosTr.position + new Vector3(0, 3f, 0);
-                    _rot = _choSeokTownMapSet.StartPosTr.rotation.eulerAngles;
-                }
-
-                // TODO : 테스트
-                //                _pos = new Vector3(-13.17f, 0.96f, -56.07f);    // 오락기
-                _pos = new Vector3(0, 5, 0);
-                _rot = new Vector3(0, 4.67f, 0);
-
-//                _pos = new Vector3(-31.57f, 1f, -65.85f);   // 정류장
-                break;
         }
 
 //        CineCam.Instance.RotTarget(_rot);
