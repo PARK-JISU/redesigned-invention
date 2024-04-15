@@ -1,0 +1,841 @@
+//using AdxUnityPlugin;
+//using GoogleMobileAds.Api;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ADManager : Singletone<ADManager>
+{
+	private const string maxSdkKey = "************************";
+
+#if UNITY_IOS
+    private const string rewardedAdUnitId = "***************";
+	private const string interstitialAdUnitId = "****************";
+#else // UNITY_ANDROID
+	private const string rewardedAdUnitId = "***************";
+	private const string interstitialAdUnitId = "***************";
+#endif
+
+	private int rewardedRetryAttempt = 0;
+	private int interstitialRetryAttempt = 0;
+
+	private ADType adType;
+	private UIBase uiBase;
+	private System.Action endDel = null;
+
+	//추가 보상 
+	private ItemData adReward =null;
+	private Dictionary<int, List<AdditionalADReward>> addAdRewardDIc = new Dictionary<int, List<AdditionalADReward>>();
+
+	public bool ShowUiNextStageInfoAd = false;
+
+	private int AdTextNum = 24;
+
+	private bool isInit = false;
+
+	public int m_NoReward_AdCnt = 0;
+	public override void Init()
+    {
+		if (isInit == true)
+			return;
+
+		isInit = true;
+
+		MaxSdkCallbacks.OnSdkInitializedEvent += sdkConfiguration =>
+		{
+			InitializeRewardedAds();
+			InitializeInterstitialAds();
+		};
+
+		MaxSdk.SetSdkKey(maxSdkKey);
+		MaxSdk.InitializeSdk();
+    }
+    #region Interstitial Ad Methods
+    private void InitializeInterstitialAds()
+    {
+		MaxSdkCallbacks.Interstitial.OnAdLoadedEvent += OnInterstitialLoadedEvent;
+		MaxSdkCallbacks.Interstitial.OnAdLoadFailedEvent += OnInterstitialFailedEvent;
+		MaxSdkCallbacks.Interstitial.OnAdDisplayFailedEvent += InterstitialFailedToDisplayEvent;
+		MaxSdkCallbacks.Interstitial.OnAdDisplayedEvent += OnInterstitialAdDisplayedEvent;
+		MaxSdkCallbacks.Interstitial.OnAdClickedEvent += OnInterstitialAdClickedEvent;
+		MaxSdkCallbacks.Interstitial.OnAdHiddenEvent += OnInterstitialDismissedEvent;
+		MaxSdkCallbacks.Interstitial.OnAdRevenuePaidEvent += OnInterstitialRevenuePaidEvent;
+
+
+		LoadInterstitialAd();
+	}
+
+	private void LoadInterstitialAd()
+	{
+		MaxSdk.LoadInterstitial(interstitialAdUnitId);
+	}
+	private void ReloadInterstitialAd()
+	{
+		interstitialRetryAttempt++;
+		double _retryDelay = Math.Pow(2, Math.Min(6, interstitialRetryAttempt));
+
+		Invoke("LoadInterstitialAd", (float)_retryDelay);
+	}
+
+	private void ShowInterstitialAd()
+	{
+		if (MaxSdk.IsInterstitialReady(interstitialAdUnitId))
+		{
+			// 검은 배경 창 활성화
+			UIAdBlank.instance.ShowBlank(true);
+
+			MaxSdk.ShowInterstitial(interstitialAdUnitId);
+		}
+		else
+		{
+			PopUpManager.instance.OpenNormalPopup(TextData.getText(TextType.PopUpText, 117));
+			ReloadInterstitialAd();
+		}
+	}
+
+	private void OnInterstitialLoadedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
+	{
+		// Interstitial ad is ready to be shown. MaxSdk.IsInterstitialReady(interstitialAdUnitId) will now return 'true'
+
+		Debug.Log("Interstitial loaded");
+
+		// Reset retry attempt
+		interstitialRetryAttempt = 0;
+	}
+
+	private void OnInterstitialFailedEvent(string adUnitId, MaxSdkBase.ErrorInfo errorInfo)
+	{
+		// Interstitial ad failed to load. We recommend retrying with exponentially higher delays up to a maximum delay (in this case 64 seconds).
+
+		ReloadInterstitialAd();
+	}
+
+	private void InterstitialFailedToDisplayEvent(string adUnitId, MaxSdkBase.ErrorInfo errorInfo, MaxSdkBase.AdInfo adInfo)
+	{
+		// Interstitial ad failed to display. We recommend loading the next ad
+		Debug.Log("Interstitial failed to display with error code: " + errorInfo.Code);
+		LoadInterstitialAd();
+	}
+
+	private void OnInterstitialAdDisplayedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+	{
+		MyDebug.LogOrange("==== AdManager.OnInterstitialAdDisplayedEvent()");
+	}
+
+	private void OnInterstitialAdClickedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+	{
+		MyDebug.LogOrange("==== AdManager.OnInterstitialAdClickedEvent() _adUnitId:" + _adUnitId);
+	}
+
+	private void OnInterstitialDismissedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
+	{
+		// Interstitial ad is hidden. Pre-load the next ad
+		Debug.Log("Interstitial dismissed");
+		UIAdBlank.instance.ShowBlank(false);
+		LoadInterstitialAd();
+
+		// 보상처리
+		endDel?.Invoke();
+		endDel = null;
+	}
+
+	private void OnInterstitialRevenuePaidEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+	{
+		// Interstitial ad revenue paid. Use this callback to track user revenue.
+		MyDebug.LogOrange("==== AdManager.OnInterstitialAdRevenuePaidEvent() _adUnitId:" + _adUnitId);
+
+		double _revenue = _adInfo.Revenue;
+		var _impressionParameters = new[]
+		{
+			new Firebase.Analytics.Parameter("ad_platform", "AppLovin"),
+			new Firebase.Analytics.Parameter("ad_source", _adInfo.NetworkName),
+			new Firebase.Analytics.Parameter("ad_unit_name", _adInfo.AdUnitIdentifier),
+			new Firebase.Analytics.Parameter("ad_format", _adInfo.AdFormat),
+			new Firebase.Analytics.Parameter("value", _revenue),
+			new Firebase.Analytics.Parameter("currency", "USD"),
+		};
+		Firebase.Analytics.FirebaseAnalytics.LogEvent("ad_impression", _impressionParameters);
+	}
+	#endregion
+	#region Rewarded Ad Methods
+	private void InitializeRewardedAds()
+    {
+		MaxSdkCallbacks.Rewarded.OnAdLoadedEvent += OnRewardedAdLoadedEvent;
+		MaxSdkCallbacks.Rewarded.OnAdLoadFailedEvent += OnRewardedAdFailedEvent;
+		MaxSdkCallbacks.Rewarded.OnAdDisplayFailedEvent += OnRewardedAdFailedToDisplayEvent;
+		MaxSdkCallbacks.Rewarded.OnAdDisplayedEvent += OnRewardedAdDisplayedEvent;
+		MaxSdkCallbacks.Rewarded.OnAdClickedEvent += OnRewardedAdClickedEvent;
+		MaxSdkCallbacks.Rewarded.OnAdHiddenEvent += OnRewardedAdDismissedEvent;
+		MaxSdkCallbacks.Rewarded.OnAdReceivedRewardEvent += OnRewardedAdReceivedRewardEvent;
+		MaxSdkCallbacks.Rewarded.OnAdRevenuePaidEvent += OnRewardedAdRevenuePaidEvent;
+
+		LoadRewardedAd();
+	}
+
+	private void LoadRewardedAd()
+    {
+//		MyDebug.LogOrange("==== AdManager.LoadRewardedAd()");
+
+		MaxSdk.LoadRewardedAd(rewardedAdUnitId);
+    }
+
+	private void ReloadRewardedAd()
+    {
+		rewardedRetryAttempt++;
+		double _retryDelay = Math.Pow(2, Math.Min(6, rewardedRetryAttempt));
+
+		Invoke("LoadRewardedAd", (float)_retryDelay);
+	}
+
+	private void ShowRewardedAd()
+    {
+//		MyDebug.LogOrange("==== AdManager.ShowRewardedAd()");
+
+		if(MaxSdk.IsRewardedAdReady(rewardedAdUnitId))
+        {
+			// 검은 배경 창 활성화
+			UIAdBlank.instance.ShowBlank(true);
+
+			MaxSdk.ShowRewardedAd(rewardedAdUnitId);
+		}
+		else
+        {
+			PopUpManager.instance.OpenNormalPopup(TextData.getText(TextType.PopUpText, 117));
+			ReloadRewardedAd();
+
+//			MyDebug.LogOrange("==== AdManager.ShowRewardedAd() Not Ready");
+		}
+    }
+
+
+	private void OnRewardedAdLoadedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+    {
+		// Rewarded ad is ready to be shown. MaxSdk.IsRewardedAdReady(rewardedAdUnitId) will now return 'true'
+//		MyDebug.LogOrange("==== AdManager.OnRewardedAdLoadedEvent() _adUnitId : "+_adUnitId);
+
+		rewardedRetryAttempt = 0;
+	}
+
+	private void OnRewardedAdFailedEvent(string _adUnitId, MaxSdkBase.ErrorInfo _errorInfo)
+    {
+		// Rewarded ad failed to load. We recommend retrying with exponentially higher delays up to a maximum delay (in this case 64 seconds).
+//		MyDebug.LogOrange("==== AdManager.OnRewardedAdFailedEvent() adUnitId:" + _adUnitId + ", errorCode:" + _errorInfo.Code);
+
+		ReloadRewardedAd();
+	}
+
+	private void OnRewardedAdFailedToDisplayEvent(string _adUnitId, MaxSdkBase.ErrorInfo _errorInfo, MaxSdkBase.AdInfo _adInfo)
+    {
+		// Rewarded ad failed to display. We recommend loading the next ad
+//		MyDebug.LogOrange("==== AdManager.OnRewardedAdFailedToDisplayEvent() _adUnit:" + _adUnitId + ", errorCode:" + _errorInfo.Code);
+
+		LoadRewardedAd();
+	}
+
+	private void OnRewardedAdDisplayedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+    {
+		MyDebug.LogOrange("==== AdManager.OnRewardedAdDisplayedEvent()");
+    }
+
+	private void OnRewardedAdClickedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+	{
+		MyDebug.LogOrange("==== AdManager.OnRewardedAdClickedEvent() _adUnitId:" + _adUnitId);
+	}
+
+	private void OnRewardedAdDismissedEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+    {
+		// Rewarded ad is hidden. Pre-load the next ad
+		MyDebug.LogOrange("==== AdManager.OnRewardedAdDismissedEvent() _adUnitId:" + _adUnitId);
+
+		UIAdBlank.instance.ShowBlank(false);
+		LoadRewardedAd();
+    }
+
+	private void OnRewardedAdReceivedRewardEvent(string _adUnitId, MaxSdk.Reward _reward, MaxSdkBase.AdInfo _adInfo)
+    {
+		// Rewarded ad was displayed and user should receive the reward
+		MyDebug.LogOrange("==== AdManager.OnRewardedAdReceivedRewardEvent() _adUnitId:" + _adUnitId);
+
+		UIAdBlank.instance.ShowBlank(false);
+
+		// 보상처리
+		ReceiveAdReward(adType);
+    }
+
+	private void OnRewardedAdRevenuePaidEvent(string _adUnitId, MaxSdkBase.AdInfo _adInfo)
+    {
+		// Rewarded ad revenue paid. Use this callback to track user revenue.
+		MyDebug.LogOrange("==== AdManager.OnRewardedAdRevenuePaidEvent() _adUnitId:" + _adUnitId);
+
+		double _revenue = _adInfo.Revenue;
+		var _impressionParameters = new[]
+		{
+			new Firebase.Analytics.Parameter("ad_platform", "AppLovin"),
+			new Firebase.Analytics.Parameter("ad_source", _adInfo.NetworkName),
+			new Firebase.Analytics.Parameter("ad_unit_name", _adInfo.AdUnitIdentifier),
+			new Firebase.Analytics.Parameter("ad_format", _adInfo.AdFormat),
+			new Firebase.Analytics.Parameter("value", _revenue),
+			new Firebase.Analytics.Parameter("currency", "USD"),
+		};
+		Firebase.Analytics.FirebaseAnalytics.LogEvent("ad_impression", _impressionParameters);
+	}
+	#endregion
+
+	/// 광고보기 버튼 클릭
+	//public void TouchAdReward(ADType _adType, UIBase _uiBase, System.Action _endDel = null,int _textNum = 0)
+	//{
+	//	if (DefineClass.isAdWatch == false)
+	//		return;
+
+	//	adType = _adType;
+	//	uiBase = _uiBase;
+	//	endDel = _endDel;
+
+	//	if (_textNum == 0)
+	//		_textNum = AdTextNum;
+
+	//	PopUpManager.instance.OpenSelectPopup(TextData.getText(TextType.PopUpText, 24), TextData.getText(TextType.PopUpText, _textNum), (PopResult _popResult, object _param) =>
+	//	{ 
+	//		if(_popResult == PopResult.Yes)
+	//           {
+	//			// 광고 제거 패키지 적용이면
+	//			if (UserDataManager.instance.RemoveAdsTime() > TimeManager.instance.Now)
+	//               {
+	//				ReceiveAdReward(adType);
+	//               }
+	//			else
+	//               {
+	//				ShowRewardedAd();
+	//               }
+	//		}
+	//	});
+	//}
+
+	////광고 강제 보기
+	public void CompulsionAd(ADType _adType,System.Action _endDel = null)
+    {
+		if (DefineClass.isAdWatch == false)
+			return;
+
+		adType = _adType;
+		endDel = _endDel;
+
+		if (UserDataManager.instance.RemoveAdsTime() > TimeManager.instance.Now)
+		{
+			//보상은 아예 안주니까 상관없음
+			endDel?.Invoke();
+			endDel = null;
+		}
+		else
+		{
+			ShowInterstitialAd();
+		}
+	}
+
+	/// 광고보기 버튼 클릭
+	public void TouchAdReward(ADType _adType, UIBase _uiBase, System.Action _endDel = null, int _maintextNum = 0, bool _showItemIcons = false, bool _isAdPopup = false, List<ItemData> _itemIcons=null)
+	{
+		if (DefineClass.isAdWatch == false)
+			return;
+
+		adType = _adType;
+		uiBase = _uiBase;
+		endDel = _endDel;
+
+		if (_maintextNum == 0)
+			_maintextNum = AdTextNum;
+
+		if (_isAdPopup)
+        {
+			PopUpManager.instance.OpenAdNormalPopup(string.Empty, TextData.getText(TextType.PopUpText, _maintextNum),TextData.getText(TextType.GlovalText,1) , _itemIcons, (PopResult _popResult, object _param) =>
+			{
+				if (_popResult == PopResult.OK)
+				{
+					// 광고 제거 패키지 적용이면
+					if (UserDataManager.instance.RemoveAdsTime() > TimeManager.instance.Now)
+					{
+						ReceiveAdReward(adType);
+					}
+					else
+					{
+						ShowRewardedAd();
+					}
+				}
+			});
+		}
+		else
+        {
+			PopUpManager.instance.OpenSelectPopup(TextData.getText(TextType.PopUpText, 24), TextData.getText(TextType.PopUpText, _maintextNum), _showItemIcons, _itemIcons, (PopResult _popResult, object _param) =>
+			{
+				if (_popResult == PopResult.Yes)
+				{
+					// 광고 제거 패키지 적용이면
+					if (UserDataManager.instance.RemoveAdsTime() > TimeManager.instance.Now)
+					{
+						ReceiveAdReward(adType);
+					}
+					else
+					{
+						ShowRewardedAd();
+					}
+				}
+				else if(_popResult == PopResult.No)
+                {
+					//일단 모든 팝업을 꺼버릴순 없어서, 변경 사항으로 말해놓은 것만 처리
+					if (_adType == ADType.Attend)
+						PopUpManager.instance.releaseAllPopUp();
+                }
+			});
+		}
+	}
+
+	void ReceiveAdReward(ADType _type)
+	{
+		MyDebug.LogWarning("!!!!! REceiveAdReward() adtype : " + _type);
+	
+		switch (_type)
+		{
+			case ADType.NONE:
+				return;
+			case ADType.CITY_HALL:
+
+				//광고관련 제한
+				UserDataManager.instance.SetlastWatchCityHallADTime();
+
+				UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.Goods, (int)GoodsType.Gold, WorldDataManager.instance.GetCommonConstValue(CommonConstant.AdRewardGoldNum)));
+				UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.Goods, (int)GoodsType.Heart, WorldDataManager.instance.GetCommonConstValue(CommonConstant.AdRewardHeartNum)));
+
+				UserDataManager.instance.ShowAddUserItem();
+
+				if (uiBase != null)
+					uiBase.Refresh();
+				break;
+			case ADType.FailRetry:
+				break;
+			case ADType.StartBoosterBuy:
+				break;
+			case ADType.Attend:
+				UserDataManager.instance.AddUserItem(new ItemData(ItemType.Pack, 1, 1));
+				break;
+			case ADType.StageMultiply:
+				UserDataManager.instance.userdatas.todayStageAdWatchCount++;
+				break;
+			case ADType.SuddenEvent:
+				break;
+			case ADType.NextInfo:
+				List<ItemData> tmpItem = new List<ItemData>();
+				tmpItem.Add(adReward);
+				PopUpManager.instance.OpenAdNormalPopup(string.Empty, TextData.getText(TextType.PopUpText, 123), TextData.getText(TextType.LobbyText, 3), tmpItem, (PopResult _popResult, object _param) =>
+				{
+					if (_popResult == PopResult.OK)
+					{
+						UserDataManager.instance.AddUserItem(adReward);
+						List<UseItemType> selStartBoosterList = new List<UseItemType>();
+						selStartBoosterList.Add((UseItemType)adReward.itemIndex);
+						UserDataManager.instance.selStartBoosterList= selStartBoosterList;
+
+                        if (UINextStageInfo.instance != null)
+                            UINextStageInfo.instance.ClickPlay();
+
+                    }
+				});
+
+
+				//즉각 넣어주기 : 연출 x 
+				//UserDataManager.instance.AddUserItem(adReward);
+				//즉각 넣어주기 : 연출 o
+				//UserDataManager.instance.SetAddUserItem(adReward);
+				//UserDataManager.instance.ShowAddUserItem();
+
+				if (EventManager.instance.SuddenEventPlay)
+					EventManager.instance.SuddenEventPlay = false;
+
+				if (uiBase != null)
+					uiBase.Refresh();
+
+				ADManager.instance.ShowUiNextStageInfoAd = true;
+				break;
+			case ADType.InGameUI:
+				InGameUI.Instance.ShowAdRewardEffect();
+                break;
+			case ADType.Roulette:
+				UserDataManager.instance.SetOneMoreFestival();
+				break;
+			case ADType.LifeCard:
+				if(CelebManager.instance.PopupUI!=null)
+                {
+					PopupLifeCardDetail lifeCard = CelebManager.instance.PopupUI.GetComponent<PopupLifeCardDetail>();
+					lifeCard.StartChangeADEffect();
+                }
+				break;
+			case ADType.BuildingAD:
+
+				UserDataManager.instance.SetlastWatchBuildingAD();
+				//셀럽 포인트를 더하던 보상을 주던 여기서 처리 
+				int celebIdx =0;
+
+				do
+				{
+					celebIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+				} 
+				while (celebIdx == WorldDataManager.instance.GetCommonConstValue(CommonConstant.CelebWhaleIdx));
+
+				//while(celebIdx != WorldDataManager.instance.GetCommonConstValue(CommonConstant.CelebWhaleIdx))
+    //            {
+				//	celebIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+
+				//	if (celebIdx == WorldDataManager.instance.GetCommonConstValue(CommonConstant.CelebWhaleIdx))
+				//		return;
+
+				//	if (celebIdx != WorldDataManager.instance.GetCommonConstValue(CommonConstant.CelebWhaleIdx))
+				//		break;
+				//}
+			
+				if (uiBase != null)
+					uiBase.Refresh();
+
+				UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.CelebPoint,celebIdx,1));
+				UserDataManager.instance.ShowAddUserItem();
+
+				//UserDataManager.instance.ShowAddUserItem(UIMain.instance.btnCelebrity.gameObject.transform.position);
+
+				break;
+			case ADType.BuildingEventAd:
+				break;
+			case ADType.GoldShop:
+
+				UserDataManager.instance.SetGoldShopADTime();
+				UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.Pack, 21, 1));
+				UserDataManager.instance.ShowAddUserItem();
+				
+				break;
+			case ADType.Stage:
+				
+				break;
+            default:
+				break;
+		}
+
+		UserDataManager.instance.AddUserWatchAdCount();
+
+        if (UserDataManager.instance.RemoveAdsTime() < TimeManager.instance.Now && UserDataManager.instance.userdatas.AdFreeTime < TimeManager.instance.Now)
+        {
+            // 100% 확률로 노출
+            int rand = UnityEngine.Random.Range(1, 101);
+            if (rand <= 100)
+            {
+                UserDataManager.instance.userdatas.AdFreeTime = System.DateTime.MaxValue;
+                if (SceneLoader.instance.currentScene.Contains("Main"))
+                    UIMain.instance.OpenPackageShop(ShopType.AdFreePackage);
+            }
+        }
+
+		endDel?.Invoke();
+		endDel = null;
+
+		UserDataManager.instance.SaveDataDicAndFile();
+	}
+
+	public void UpdateTableData(GetLocalRefIdx refIdx, List<object> listData)
+    {
+
+		addAdRewardDIc.Clear();
+
+        switch (refIdx)
+        {
+            case GetLocalRefIdx.AdditionalADReward:
+				for (int i = 0; i < listData.Count; i++)
+				{
+					AdditionalADReward addAdRewardData = new AdditionalADReward(new JsonLstDecode(listData[i]));
+
+					if (addAdRewardDIc.ContainsKey(addAdRewardData.Kind) == false)
+						addAdRewardDIc.Add(addAdRewardData.Kind, new List<AdditionalADReward>());
+
+					addAdRewardDIc[addAdRewardData.Kind].Add(addAdRewardData);
+				}
+				break;
+
+        }
+
+    }
+
+
+	public ItemData GetAdditionalADReward()
+    {
+		int _type = 1;
+        switch (SceneLoader.instance.currentScene)
+        {
+			case "2._Main":_type = 1; break;
+			case "Puzzle": _type = 2; break;
+		}
+
+		float total = 0;
+		var _rand = addAdRewardDIc[_type].GetEnumerator();
+		while(_rand.MoveNext())
+        {
+			total += _rand.Current.FstvVal;
+        }
+
+		float randPoint = UnityEngine.Random.Range(0, total);
+
+		var _randItem = addAdRewardDIc[_type].GetEnumerator();
+		while (_randItem.MoveNext())
+        {
+			if (randPoint < _randItem.Current.FstvVal)
+				return _randItem.Current.RewardItem;
+			else
+				randPoint -= _randItem.Current.FstvVal;
+        }
+		return null;
+    }
+
+	public void SetAdRewardItem(ItemData _rewardItem)
+    {
+		adReward = _rewardItem;
+    }
+
+	public void SetCompulsionCnt() => m_NoReward_AdCnt++;
+	public bool CompulsionAD()
+    {
+
+#if UNITY_EDITOR
+		if (GameData.bMapEditor)
+			return false;
+#endif
+		if (OpenCompulsionAD() == false)
+			return false;
+
+		return m_NoReward_AdCnt % WorldDataManager.instance.GetCommonConstValue(CommonConstant.ComplisionADCnt) == 0;
+    }
+
+	//강제 광고 보기 레벨 제한 
+	public bool OpenCompulsionAD()
+    {
+		return UserDataManager.instance.GetUserPuzzleStage() >= WorldDataManager.instance.GetCommonConstValue(CommonConstant.ComplisionADOpenLevel);
+    }
+	/*
+		UIBase uiBase = null;
+		// 광고 보상 타입
+		ADType m_AdType = ADType.NONE;
+
+		bool _bBGSound = false;
+
+	#if UNITY_ANDROID
+		string AdxAppID = "649912b9dc988d0001000085";
+	#elif UNITY_IOS
+		string AdxAppID = "64bf2e0b46d3c80001000059";
+	#endif
+
+	#if UNITY_ANDROID
+		string adxRewardedAdUnitId = "649913b2dc988d0001000086";
+	#elif UNITY_IOS
+		string adxRewardedAdUnitId = "64bf31456ab9660001000076";
+	#endif
+
+		private AdxRewardedAd rewardedAd;
+
+		public override void Init()
+		{
+			base.Init();
+
+			AdxSDK.SetLogEnable(true);
+
+			ADXConfiguration adxConfiguration = new ADXConfiguration.Builder()
+				.SetAppId(AdxAppID)
+				.SetGdprType(GdprType.POPUP_LOCATION).Build();
+
+			AdxSDK.Initialize(adxConfiguration, adxConsentState =>
+			{
+				Debug.Log(":::onADXConsentCompleted : " + adxConsentState);
+
+				LoadRewardedAd();
+			});
+		}
+
+		public void LoadRewardedAd()
+		{
+			if (rewardedAd == null)
+			{
+				rewardedAd = new AdxRewardedAd(adxRewardedAdUnitId);
+				rewardedAd.OnRewardedAdLoaded += RewardedAd_OnRewardedAdLoaded;
+				rewardedAd.OnRewardedAdFailedToLoad += RewardedAd_OnRewardedAdFailedToLoad;
+				rewardedAd.OnRewardedAdShown += RewardedAd_OnRewardedAdShown;
+				rewardedAd.OnRewardedAdClicked += RewardedAd_OnRewardedAdClicked;
+				rewardedAd.OnRewardedAdFailedToShow += RewardedAd_OnRewardedAdFailedToShow;
+				rewardedAd.OnRewardedAdEarnedReward += RewardedAd_OnRewardedAdEarnedReward;
+				rewardedAd.OnRewardedAdClosed += RewardedAd_OnRewardedAdClosed;
+			}
+
+			rewardedAd.Load();
+		}
+
+		private void RewardedAd_OnRewardedAdClosed()
+		{
+			if (rewardedAd != null)
+			{
+				rewardedAd.Destroy();
+				rewardedAd = null;
+			}
+			LoadRewardedAd();
+		}
+
+		private bool bUpdate = false;
+
+		private void Update()
+		{
+			if (bUpdate)
+			{
+				bUpdate = false;
+
+				ReceiveAdReward(m_AdType);
+			}
+		}
+
+		private void RewardedAd_OnRewardedAdEarnedReward()
+		{
+			// 보상 관련
+			bUpdate = true;
+		}
+
+		private void RewardedAd_OnRewardedAdFailedToShow()
+		{
+		}
+
+		private void RewardedAd_OnRewardedAdClicked()
+		{
+		}
+
+		private void RewardedAd_OnRewardedAdShown()
+		{
+		}
+
+		private void RewardedAd_OnRewardedAdFailedToLoad(int obj)
+		{
+		}
+
+		private void RewardedAd_OnRewardedAdLoaded()
+		{
+		}
+
+		private void ShowRewardedAd()
+		{
+			if(rewardedAd != null)
+			{
+				if (rewardedAd.IsLoaded())
+				{
+					rewardedAd.Show();
+				}
+				else
+				{
+					PopUpManager.instance.OpenNormalPopup("준비된 광고가 없습니다.\n잠시 후 다시 시도해주세요.");
+					rewardedAd.Load();
+				}
+			}
+		}
+
+		System.Action endDel = null;
+
+		/// 광고보기 버튼 클릭
+		public void TouchAdReward(ADType _adType, UIBase _uiBase, System.Action _endDel = null)
+		{
+			if (DefineClass.isAdWatch == false) return;
+
+			m_AdType = _adType;
+			uiBase = _uiBase;
+			endDel = _endDel;
+
+			//ItemData rewardItem = null;
+
+			//PopUpManager.instance.OpenSelectPopup("광고 (임시)", "광고를 시청하시고 보상을 획득하시겠습니까?\n(임시)", (PopResult result, object _param) =>
+			PopUpManager.instance.OpenSelectPopup(TextData.getText(TextType.PopUpText, 24), TextData.getText(TextType.PopUpText, 109), (PopResult result, object _param) =>
+			{
+				if (result == PopResult.Yes)
+				{
+	#if UNITY_EDITOR
+					ReceiveAdReward(_adType);
+	#else
+					if (UserDataManager.instance.RemoveAdsTime() > TimeManager.instance.Now)
+					{
+						// 광고 제거 패키지 적용중이라면?
+						ReceiveAdReward(_adType);
+					}
+					else
+					{
+						// 실제 광고요청
+						StartCoroutine(Continue_RequestRewardBasedVideo());
+					}
+	#endif
+				}
+			});
+		}
+
+		IEnumerator Continue_RequestRewardBasedVideo()
+		{
+			// 여기서 광고보고 Handler에서 보상지급
+			if (rewardedAd == null)
+			{
+				LoadRewardedAd();
+			}
+
+			ShowRewardedAd();
+
+			// 원래는 광고요청만 해야함
+			//ReceiveAdReward(m_AdType);
+
+			yield return null;
+		}
+
+		void ReceiveAdReward(ADType _type)
+		{
+			switch (_type)
+			{
+				case ADType.NONE:
+					return;
+				case ADType.CITY_HALL:
+					UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.Goods, (int)GoodsType.Gold, WorldDataManager.instance.GetCommonConstValue(CommonConstant.AdRewardGoldNum)));
+					UserDataManager.instance.SetAddUserItem(new ItemData(ItemType.Goods, (int)GoodsType.Heart, WorldDataManager.instance.GetCommonConstValue(CommonConstant.AdRewardHeartNum)));
+
+					UserDataManager.instance.ShowAddUserItem();
+
+					if (uiBase != null)
+						uiBase.Refresh();
+					break;
+				case ADType.FailRetry:
+
+					break;
+				case ADType.StartBoosterBuy:
+
+					break;
+				case ADType.Attend:
+					UserDataManager.instance.AddUserItem(new ItemData(ItemType.Pack, 1, 1));
+					break;
+				case ADType.StageMultiply:
+					UserDataManager.instance.userdatas.todayStageAdWatchCount++;
+					break;
+				case ADType.SuddenEvent:
+					break;
+				default:
+					break;
+			}
+
+			UserDataManager.instance.AddUserWatchAdCount();
+
+			if (UserDataManager.instance.RemoveAdsTime() < TimeManager.instance.Now && UserDataManager.instance.userdatas.AdFreeTime < TimeManager.instance.Now)
+			{
+				// 20% 확률로 노출
+				int rand = Random.Range(1, 101);
+				if (rand <= 20)
+				{
+					UserDataManager.instance.userdatas.AdFreeTime = System.DateTime.MaxValue;
+					if (SceneLoader.instance.currentScene.Contains("Main"))
+						UIMain.instance.OpenPackageShop(ShopType.AdFreePackage);
+				}
+			}
+
+			endDel?.Invoke();
+			endDel = null;
+
+			UserDataManager.instance.SaveDataDicAndFile();
+		}
+	*/
+}
