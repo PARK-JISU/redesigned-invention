@@ -1,0 +1,1965 @@
+using System;
+using System.Linq;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public enum ClientEventKind
+{
+    None = 0,
+    ContinueWinEvent = 1, // 연속 클리어 이벤트
+    PerfectWinEvent = 2, // 퍼펙트 클리어 이벤트
+
+    DisasterEvent = 11,   // 재난 이벤트
+    FireWorks = 21,       // 폭죽 이벤트
+    MagicTree = 31,       // 신비한 나무 이벤트               
+    HarvestEvent = 41,    //추수 이벤트 
+    TouristEvent = 51,
+    MileageEvent = 52,
+    HarborEvent = 53,
+    Max,
+}
+
+public enum BitCheck
+{
+    SeasonPass_Free = 1,
+    SeasonPass_Premium,
+    Event,
+    Attendance,
+    Festival,
+    SuddenEvent,
+    MagicTree,
+    DisasterEvent,
+    FireWorks,
+    Max,
+}
+
+
+public enum EventKind
+{
+    None,
+
+    // 서버 이벤트
+    SeasonPass = 1,
+    Event = 2,
+
+    //Coupon =3,
+
+    // 클라 이벤트
+    AttendCheck = 10,
+    Festival = 11,
+    SuddenEvent = 12,
+    MagicTree = 13,
+    DisasterEvent = 14,
+    FireWorks = 15,
+
+    MirrorBallShow = 16,
+    Lava = 17,
+
+    ThreeByThree = 18,
+    LevelAchieve = 19,
+    /// <summary> 팀 처음 가입시 보상 </summary>
+    FirstTeamJoinReward = 20,
+    /// <summary> 쥬스 샵 </summary>
+    FruitJuiceShopEvent = 21,
+    /// <summary> 팀 배틀 </summary>
+    TeamBattle = 22,
+    /// <summary> 무역랭킹 </summary>
+    TradeRank = 23,
+
+
+
+    Max
+}
+
+public class EventManager : Singletone<EventManager>
+{
+    // ******************************************** [서버 이벤트 구성 정보] *****************************************************
+    private Dictionary<EventKind, Dictionary<int, EventDataTable>> dicEventDatas = new Dictionary<EventKind, Dictionary<int, EventDataTable>>();
+    // **************************************************************************************************************************
+
+    // 시즌 패스 보상
+    private Dictionary<int, Dictionary<SeasonPassType, SeasonPassRewardTable>> dicSeasonPassReward = new Dictionary<int, Dictionary<SeasonPassType, SeasonPassRewardTable>>();
+
+    // 끝없는 보물 이벤트
+    private Dictionary<int, EndlessTreasureTableData> dicEndlessTreasureTableData = new Dictionary<int, EndlessTreasureTableData>();
+
+    // 시즌 패스 레벨
+    private Dictionary<int, SeasonPassLevelTable> dicSeasonPassLv = new Dictionary<int, SeasonPassLevelTable>();
+
+    // 출석 보상
+    private Dictionary<int, AttendRewardTable> dicAttendRewardTable = new Dictionary<int, AttendRewardTable>();
+
+    // 축제 보상
+    private Dictionary<int, FestivalRewardTable> dicFestivalRewardTable = new Dictionary<int, FestivalRewardTable>();
+
+    // 이벤트 보상
+    private Dictionary<int, EventRewardTable> dicEventRewardTable = new Dictionary<int, EventRewardTable>();
+
+    // 돌발이벤트 보상
+    private Dictionary<int, SuddenEvtRewardTable> dicSuddenEventRewardTable = new Dictionary<int, SuddenEvtRewardTable>();
+
+    // 클리어이벤트 보상
+    //private Dictionary<int, ClearEventRwdTable> dicClearEventRwdTable = new Dictionary<int, ClearEventRwdTable>();
+    private Dictionary<int, MagicTreeEventTable> dicMagicTreeEventTable = new Dictionary<int, MagicTreeEventTable>();
+
+    private Dictionary<BDState, DisasterEventRewardData> dicDisasterEventRewardTable = new Dictionary<BDState, DisasterEventRewardData>();
+
+    private Dictionary<MiniGameType, MiniGameTableData> m_dicMiniGameTable = new Dictionary<MiniGameType, MiniGameTableData>();
+
+    // 연속 클리어 이벤트 보상
+    private Dictionary<int, ContinueWinRwdTable> m_dicContinueWinRwdTable = new Dictionary<int, ContinueWinRwdTable>();
+    // 퍼펙트 클리어 이벤트 보상
+    private Dictionary<int, ContinueWinRwdTable> m_dicPerfectWinRwdTable = new Dictionary<int, ContinueWinRwdTable>();
+
+    // 클라이언트 이벤트 스케쥴 데이터
+    private Dictionary<ClientEventKind, EventTimeData> m_dicClientTimeTable = new Dictionary<ClientEventKind, EventTimeData>();
+
+    public List<LongTermDisConTableData> longTermTableData = new List<LongTermDisConTableData>();
+
+    public List<FireWorkEventTableData> fireWorkEventTableData = new List<FireWorkEventTableData>();
+
+    //public List<LevelAchieveEventTableData> levelAchieveEventTableData = new List<LevelAchieveEventTableData>();
+
+    public Dictionary<int, List<ItemData>> rewardDataTable = new Dictionary<int, List<ItemData>>();
+    //쿠폰
+    public Dictionary<int, CouponData> CouponDataTable = new Dictionary<int, CouponData>();
+    //3X3보상 
+    private Dictionary<int, ThreeByThreeClearRewardTableData> threeByThreeRewardTable = new Dictionary<int, ThreeByThreeClearRewardTableData>();
+    //레벨 보상
+    public Dictionary<int, List<ItemData>> levelAchieveRewardTable = new Dictionary<int, List<ItemData>>();
+    //추수 이벤트
+    public Dictionary<int, HarvestEventTableData> HarvestRewardTable = new Dictionary<int, HarvestEventTableData>();
+    public Dictionary<int, HarvestStageIdxTableData> HarvestStageTable = new Dictionary<int, HarvestStageIdxTableData>();
+    //과일 샵
+    public Dictionary<int, FruitShopEventClientTableData> FruitShopClientTable = new Dictionary<int, FruitShopEventClientTableData>();
+    public Dictionary<int, FruitShopEventRewardTableData> FruitShopRewardTable = new Dictionary<int, FruitShopEventRewardTableData>();
+    public Dictionary<int, FruitShopEventJuiceRecipeTableData> FruitShopRecipeTable = new Dictionary<int, FruitShopEventJuiceRecipeTableData>();
+
+    public Dictionary<int, int> TmpFruitCountDic = new Dictionary<int, int>();
+
+    private DateTime FruitShopstartTime;
+    private int FruitShopcycleMin;
+    private int FruitShoprestMin;
+    //3X3
+    private DateTime ThreeByThreestartTime;
+    private int ThreeByThreecycleMin;
+    private int ThreeByThreerewardMIn;
+    private int ThreeByThreerestMin;
+
+    //마일리지
+    private DateTime MileageEventStartTime;
+    private int MileageEvetnCycleMin;
+    private int MileageEvetnRestMin;
+    //선택한 탭
+    public UIEventCenterTab selectTab = UIEventCenterTab.NONE;
+
+    //이벤트 센터
+    public Dictionary<int, MileageRewardTable> MileageTable = new Dictionary<int, MileageRewardTable>();
+    public Dictionary<int, MileageCompleteRewardTable> MileageCompleteTable = new Dictionary<int, MileageCompleteRewardTable>();
+    public Dictionary<int, AttendCheckEventRewardTable> AttendCheckTable = new Dictionary<int, AttendCheckEventRewardTable>();
+    public Dictionary<int,List<BuildingEventTable>> BuildingEventCompleteTable = new Dictionary<int,List<BuildingEventTable>>();
+    //매일 갱신 보상 값
+    private int PerDayRewardMin;
+
+    //HarvestEvent
+    //추수 이벤트로 시작한건지 확인하기 위해
+    public bool HarvestStartPlay=false;
+    //재난 이벤트 
+    public bool DisasterStartPlay = false;
+    //챌린지 모드 실패
+    public bool ChallengeFail = false;
+    //서든 이벤트 팝업
+    public bool SuddenEventPlay = false;
+    //이동횟수제한 팝업
+    public bool AlreadyShowMoveCntAlram = false;
+    public void ClearEventDataTables()
+    {
+        dicEventDatas.Clear();
+
+        dicSeasonPassReward.Clear();
+        dicSeasonPassLv.Clear();
+        dicAttendRewardTable.Clear();
+        dicFestivalRewardTable.Clear();
+        dicEventRewardTable.Clear();
+        dicSuddenEventRewardTable.Clear();
+        //dicClearEventRwdTable.Clear();
+        dicMagicTreeEventTable.Clear();
+        dicDisasterEventRewardTable.Clear();
+        m_dicMiniGameTable.Clear();
+        dicEndlessTreasureTableData.Clear();
+
+        m_dicClientTimeTable.Clear();
+        longTermTableData.Clear();
+
+        fireWorkEventTableData.Clear();
+        //levelAchieveEventTableData.Clear();
+
+        m_dicContinueWinRwdTable.Clear();
+        m_dicPerfectWinRwdTable.Clear();
+
+        rewardDataTable.Clear();
+        CouponDataTable.Clear();
+        threeByThreeRewardTable.Clear();
+        levelAchieveRewardTable.Clear();
+        HarvestRewardTable.Clear();
+        HarvestStageTable.Clear();
+
+        FruitShopClientTable.Clear();
+        FruitShopRewardTable.Clear();
+        FruitShopRecipeTable.Clear();
+        TmpFruitCountDic.Clear();
+
+
+        MileageTable.Clear();
+        MileageCompleteTable.Clear();
+        BuildingEventCompleteTable.Clear();
+    }
+
+    public void UpdateServerData(List<object> listData)
+    {
+        for (int i = 0; i < listData.Count; i++)
+        {
+            EventDataTable table = new EventDataTable(new JsonLstDecode(listData[i]));
+
+            if (dicEventDatas.ContainsKey(table.eventType) == false)
+            {
+                dicEventDatas.Add(table.eventType, new Dictionary<int, EventDataTable>());
+            }
+
+            dicEventDatas[table.eventType].Add(table.eventIdx, table);
+        }
+//        MyDebug.LogError("======EventManager.instance.dicEventDatas.Count : " + dicEventDatas.Count);
+    }
+
+    #region 이벤트 센터 : 3X3,쿠폰
+    public void UpdateRewardServerData(List<object> _listData)
+    {
+        for (int i = 0; i < _listData.Count; i++)
+        {
+            List<object> _tempList = (List<object>)_listData[i];
+            EventKind _eventKind = (EventKind)Convert.ToInt32(_tempList[0]);
+
+            if (_eventKind == EventKind.ThreeByThree)
+            {
+                JsonLstDecode _decode = new JsonLstDecode(_tempList);
+                ////GevIdx
+                _decode.Next();
+                //GevNum
+                int _itemGevNum = _decode.getInt();
+                //RwadNum
+                _decode.Next();
+
+                ItemData _itemData = new ItemData((ItemType)_decode.getInt(), _decode.getInt(), _decode.getInt(), _decode.getInt(), _itemGevNum);
+                //rewardDataTable.Add(_itemSvIdx, _itemData);
+                if (rewardDataTable.ContainsKey(_itemGevNum) == false)
+                    rewardDataTable.Add(_itemGevNum, new List<ItemData>());
+
+                if (rewardDataTable[_itemGevNum].Contains(_itemData) == false)
+                    rewardDataTable[_itemGevNum].Add(_itemData);
+#if UNITY_EDITOR
+//                MyDebug.LogLightBlue("ItemType:" + _itemData.itemType + ", Idx : " + _itemData.itemIndex + ", cnt:" + _itemData.itemCount + " , percent : " + _itemData.itemPercent);
+#endif
+            }
+            else if (_eventKind == EventKind.LevelAchieve)
+            {
+
+                JsonLstDecode _decode = new JsonLstDecode(_tempList);
+
+                _decode.Next();
+                int _levelIdx = _decode.getInt();
+                _decode.Next();
+
+                ItemData _itemData = new ItemData((ItemType)_decode.getInt(), _decode.getInt(), _decode.getInt());
+#if UNITY_EDITOR
+//                MyDebug.LogOrange("levelIdx :"+_levelIdx+", ItemType:" + _itemData.itemType + ", Idx : " + _itemData.itemIndex + ", cnt:" + _itemData.itemCount);
+#endif
+                if (levelAchieveRewardTable.ContainsKey(_levelIdx) == false)
+                    levelAchieveRewardTable.Add(_levelIdx, new List<ItemData>());
+
+                if (levelAchieveRewardTable[_levelIdx].Contains(_itemData) == false)
+                    levelAchieveRewardTable[_levelIdx].Add(_itemData);
+
+            }
+        }
+    }
+
+
+    public void UpdateServerCouponData(List<object> listData)
+    {
+        CouponDataTable.Clear();
+
+        for (int i = 0; i < listData.Count; i++)
+        {
+            CouponData table = new CouponData(new JsonLstDecode(listData[i]));
+
+            if (CouponDataTable.ContainsKey(table.CouponTypicalIdx) == false)
+            {
+                CouponDataTable.Add(table.CouponTypicalIdx, new CouponData());
+            }
+
+            CouponDataTable[table.CouponTypicalIdx] = table;
+        }
+    }
+
+    public List<CouponData> GetUsableCouponDataLIst()
+    {
+        List<CouponData> temp = new List<CouponData>();
+        foreach(CouponData data in CouponDataTable.Values)
+        {
+            if(data.ExpirationDate> TimeManager.instance.Now&& data.StartDate<=TimeManager.instance.Now)
+            {
+                temp.Add(data);
+            }
+        }
+        
+        return temp;
+    }
+
+    public CouponData GetCouponData(int _typicalId)
+    {
+        return CouponDataTable[_typicalId];
+    }
+    public void UpdateServerDataTime(List<object> _listData)
+    {
+        EventKind _eventKind = (EventKind)Convert.ToInt32(_listData[0]);
+        if(_eventKind == EventKind.ThreeByThree)
+        {
+            JsonLstDecode _decode = new JsonLstDecode(_listData);
+            _decode.Next();
+            _decode.Next();
+
+            ThreeByThreestartTime = TimeManager.instance.ParseExactToUTC(_decode.getString());
+
+#if UNITY_EDITOR
+            if(TestSetting.instance.IsStartThreeByThreeEvent)
+            {
+                DateTime _now = TimeManager.instance.Now;
+                ThreeByThreestartTime = new DateTime(_now.Year, _now.Month, _now.Day, ThreeByThreestartTime.Hour, ThreeByThreestartTime.Minute, ThreeByThreestartTime.Second);
+            }
+#endif
+
+            _decode.Next();
+
+            ThreeByThreecycleMin = _decode.getInt();
+            ThreeByThreerestMin = _decode.getInt();
+            ThreeByThreerewardMIn = _decode.getInt();
+            PerDayRewardMin = _decode.getInt();
+        }
+        else if (_eventKind == EventKind.FruitJuiceShopEvent)
+        {
+            JsonLstDecode _decode = new JsonLstDecode(_listData);
+            _decode.Next();
+            _decode.Next();
+
+            FruitShopstartTime = TimeManager.instance.ParseExactToUTC(_decode.getString());
+
+#if UNITY_EDITOR
+            if (TestSetting.instance.IsStartFruitShopEvent)
+            {
+                DateTime _now = TimeManager.instance.Now;
+                FruitShopstartTime = new DateTime(_now.Year, _now.Month, _now.Day, FruitShopstartTime.Hour, FruitShopstartTime.Minute, FruitShopstartTime.Second);
+            }
+#endif
+            _decode.Next();
+            FruitShopcycleMin = _decode.getInt();
+            FruitShoprestMin = _decode.getInt();
+
+        }
+
+    }
+
+    //3가지중 선택할 데이터
+    public List<ItemData> GetThreeByThreeBeforeChoiceItemList()
+    {
+        List<ItemData> _temp = new List<ItemData>();
+
+        for (int i = 1; i < rewardDataTable.Count + 1; i++)
+        {
+            for (int j = 0; j < rewardDataTable[i].Count; j++)
+            {
+                if (rewardDataTable[i][j].itemPercent == 0)
+                {
+                    _temp.Add(rewardDataTable[i][j]);
+                }
+            }
+            //if(rewardDataTable[i].itemPercent==0)
+            //{
+            //    _temp.Add(rewardDataTable[i]);
+            //}
+        }
+
+        return _temp;
+    }
+
+    //3X3에 들어갈 아이템 데이터
+    public List<ItemData> GetThreeByThreeAfterChoiceItemList(ItemData _choiceData)
+    {
+        //Dictionary<int, ItemData> _temp = rewardDataTable;
+
+        Dictionary<int, List<ItemData>> temp = rewardDataTable;
+
+        List<int> RandomList = new List<int>();
+
+        float total = 100;
+
+        float randPoint = UnityEngine.Random.value * total;
+
+        //갯수 모자라지 않게 하는 방어
+        while (RandomList.Count < 9)
+        {
+            for (int i = 1; i < temp.Count+1; i++)
+            {
+                for (int j = 0; j < temp[i].Count; j++)
+                {
+                    if (randPoint < temp[i][j].itemPercent)
+                    {
+                        RandomList.Add(i);
+                    }
+                    else
+                    {
+                        randPoint -= temp[i][j].itemPercent;
+                    }
+                }
+                //if (randPoint < _temp[i].itemPercent)
+                //{
+                //    RandomList.Add(i);
+                //}
+                //else
+                //{
+                //    randPoint -= _temp[i].itemPercent;
+                //}
+            }
+        }
+
+
+        List<ItemData> _tempItemDatas = new List<ItemData>();
+        System.Random rand = new System.Random();
+
+        for (int i = 0; i < 8; i++)
+        {
+            int _rand = rand.Next(RandomList[0], RandomList[RandomList.Count - 1]);
+            //MyDebug.LogError("======rand :" + _rand);
+            _tempItemDatas.Add(temp[_rand][0]);
+            RandomList.Remove(_rand);
+        }
+
+        _tempItemDatas.Add(_choiceData);
+
+        MyDebug.LogError(_tempItemDatas.Count);
+        //셔플
+        List<ItemData> _getItemDatas = new List<ItemData>();
+
+        var rnd = new System.Random();
+        var randomized = _tempItemDatas.OrderBy(item => rnd.Next());
+
+        foreach (var value in randomized)
+        {
+            _getItemDatas.Add((ItemData)value);
+        }
+
+        return _getItemDatas;
+    }
+
+    public Dictionary<int, ItemData> GetClearRewardData()
+    {
+        Dictionary<int, ItemData> _temp = new Dictionary<int, ItemData>();
+
+        //리워드 테이블은 인덱스가 1부터 시작
+        for (int i = 0; i < threeByThreeRewardTable.Count; i++)
+        {
+            if (_temp.ContainsKey(i) == false)
+                _temp.Add(i, new ItemData());
+            _temp[i] = new ItemData(threeByThreeRewardTable[i + 1].itemType, threeByThreeRewardTable[i + 1].itemIdx, threeByThreeRewardTable[i + 1].ItemCnt);
+        }
+
+
+        return _temp;
+    }
+
+    public bool isThreeByThreeStart()
+    {
+        if (NetManager.instance.NetworkConnectCheck())
+        {
+            return GetCurrThreeByThreeStartTime() <= TimeManager.instance.Now && TimeManager.instance.Now < GetCurrRewardEndTime();
+        }
+
+        return false;
+    }
+
+    public bool isThreeByThreeRewardTime()
+    {
+        if (NetManager.instance.NetworkConnectCheck())
+        {
+            return TimeManager.instance.Now >= GetCurrentThreeByThreeEndTime() && TimeManager.instance.Now < GetCurrRewardEndTime();
+        }
+
+        return false;
+    }
+
+    //하루에 하나 오픈권 받을수있는지
+    public bool CanGetThreeByThreeOpenTicket()
+    {
+        if(NetManager.instance.NetworkConnectCheck())
+        {
+            if(isThreeByThreeStart() && !isThreeByThreeRewardTime())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    public DateTime GetCurrThreeByThreeStartTime()
+    {
+        //return TimeManager.instance.GetCycleEventStartTime(startTime, cycleMin, restMin+rewardMIn);//restMin이랑 reward restMin합치기
+        return TimeManager.instance.GetCycleEventStartTime(ThreeByThreestartTime, ThreeByThreecycleMin+ ThreeByThreerewardMIn, ThreeByThreerestMin);
+    }
+
+    public DateTime GetCurrentThreeByThreeEndTime()
+    {
+        return GetCurrThreeByThreeStartTime().AddMinutes(ThreeByThreecycleMin);
+    }
+
+    public DateTime GetCurrRewardEndTime()
+    {
+        return GetCurrThreeByThreeStartTime().AddMinutes(ThreeByThreecycleMin + ThreeByThreerewardMIn);
+    }
+
+    //매일 오픈권 티켓 받는 시간
+    public DateTime GetCurrThreeByThreeCanOpenTicketTime()
+    {
+        return TimeManager.instance.GetCycleEventStartTime(ThreeByThreestartTime, PerDayRewardMin, 0);
+    }
+
+    //기간을 나타내는데 사용할것
+    public string GetThreeByThreePeriod(DateTime _start, DateTime _reward)
+    {
+        string _temp = string.Format("[{0}]:~{1} [{2}]:~{3}", TextData.getText(TextType.EventCenter, 11), _start.Month+"."+_start.Day, TextData.getText(TextType.GlovalText, 112), _reward.Month + "." + _reward.Day);
+        return _temp;
+    }
+
+    #endregion
+    public void UpdateTableData(GetLocalRefIdx tableId, List<object> listData)
+    {
+        switch (tableId)
+        {
+            case GetLocalRefIdx.SeasonPassReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    SeasonPassRewardTable data = new SeasonPassRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (dicSeasonPassReward.ContainsKey(data.seasonRank) == false)
+                        dicSeasonPassReward.Add(data.seasonRank, new Dictionary<SeasonPassType, SeasonPassRewardTable>());
+
+                    if (dicSeasonPassReward[data.seasonRank].ContainsKey(data.seasonPassType) == false)
+                        dicSeasonPassReward[data.seasonRank].Add(data.seasonPassType, data);
+                    else
+                        MyDebug.LogError("dicSeasonPassReward Already Has A Key : " + data.seasonRank + "/" + data.seasonPassType);
+                }
+                break;
+            case GetLocalRefIdx.SeasonPassLv:
+                int prevExp = 0;
+
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    SeasonPassLevelTable table = new SeasonPassLevelTable(new JsonLstDecode(listData[i]), prevExp);
+
+                    if (dicSeasonPassLv.ContainsKey(table.spLv) == false)
+                    {
+                        prevExp = table.needExp;
+                        dicSeasonPassLv.Add(table.spLv, table);
+                    }
+                    else
+                        MyDebug.LogError("dicSeasonPassLv Already Has A Key : " + table.spLv);
+                }
+                break;
+            case GetLocalRefIdx.FirstAttendReward:
+            case GetLocalRefIdx.NormalAttendReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    JsonLstDecode data = new JsonLstDecode(listData[i]);
+
+                    int atdRwdIdx = data.getInt();
+                    int startLv = data.getInt();
+
+                    if (dicAttendRewardTable.ContainsKey(atdRwdIdx) == false)
+                        dicAttendRewardTable.Add(atdRwdIdx, new AttendRewardTable(atdRwdIdx, startLv));
+
+                    int atdDay = data.getInt();
+                    ItemData rewardItem = new ItemData((ItemType)data.getInt(), data.getInt(), data.getInt());
+
+                    dicAttendRewardTable[atdRwdIdx].AddRewardItems(atdDay, rewardItem);
+                }
+                break;
+            case GetLocalRefIdx.FestivalReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    FestivalRewardTable data = new FestivalRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (dicFestivalRewardTable.ContainsKey(data.fstvIdx) == false)
+                        dicFestivalRewardTable.Add(data.fstvIdx, data);
+                    else
+                        MyDebug.LogError("dicFestivalRewardTable Already Has A Key : " + data.fstvIdx);
+                }
+                break;
+            case GetLocalRefIdx.EventReward:
+                int beforeNum = 0;
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    EventRewardTable data = new EventRewardTable(beforeNum, new JsonLstDecode(listData[i]));
+
+                    if (dicEventRewardTable.ContainsKey(data.rwdIdx) == false)
+                    {
+//                        MyDebug.LogLightBlue("==== Add EventReward()");
+                        dicEventRewardTable.Add(data.rwdIdx, data);
+                        beforeNum = data.needNum;
+                    }
+                    else
+                        MyDebug.LogError("dicEventRewardTable Already Has A Key : " + data.rwdIdx);
+                }
+                break;
+            case GetLocalRefIdx.SuddenEventReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    SuddenEvtRewardTable data = new SuddenEvtRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (dicSuddenEventRewardTable.ContainsKey(data.evtIdx) == false)
+                        dicSuddenEventRewardTable.Add(data.evtIdx, data);
+                    else
+                        MyDebug.LogError("dicSuddenEventRewardTable Already Has A Key : " + data.evtIdx);
+                }
+                break;
+            case GetLocalRefIdx.MagicTreeTable:
+                int _prevExp = 0;
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    MagicTreeEventTable data = new MagicTreeEventTable(new JsonLstDecode(listData[i]), _prevExp);
+                    _prevExp += data.clearNum;
+
+                    if (dicMagicTreeEventTable.ContainsKey(data.evtIdx) == false)
+                        dicMagicTreeEventTable.Add(data.evtIdx, data);
+                    else
+                        MyDebug.LogError("dicMagicTreeEventTable Already Has A Key : " + data.evtIdx);
+                }
+                break;
+            case GetLocalRefIdx.DisasterEventReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    DisasterEventRewardData data = new DisasterEventRewardData(new JsonLstDecode(listData[i]));
+
+                    if (dicDisasterEventRewardTable.ContainsKey(data.bdState) == false)
+                        dicDisasterEventRewardTable.Add(data.bdState, data);
+                    else
+                        MyDebug.LogError($"DisasterClearEventRewardTable Already Has A Key : {data.bdState}");
+                }
+                break;
+            //case GetRefIdx.MiniGame:
+            //    for (int i = 0; i < listData.Count; i++)
+            //    {
+            //        JsonLstDecode _decode = new JsonLstDecode(listData[i]);
+            //        MiniGameTableData pTable = new MiniGameTableData(_decode);
+            //        m_dicMiniGameTable.Add(pTable.gameType, pTable);
+            //    }
+            //    break;
+            //            case GetRefIdx.MiniGame_Rewards:
+            //                for (int i = 0; i < listData.Count; i++)
+            //                {
+            //                    JsonLstDecode _decode = new JsonLstDecode(listData[i]);
+            //                    MiniGameType nIdx = (MiniGameType)_decode.getInt();
+            //                    if (m_dicMiniGameTable.ContainsKey(nIdx))
+            //                    {
+            //                        m_dicMiniGameTable[nIdx].updateRewardData(_decode);
+            //                    }
+            //                    else
+            //                    {
+            //#if UNITY_EDITOR
+            //                        Debug.LogError("????");
+            //#endif
+            //                    }
+            //                }
+            //                break;
+            case GetLocalRefIdx.ClientEventTimeData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    JsonLstDecode decode = new JsonLstDecode(listData[i]);
+                    EventTimeData eventTimeData = new EventTimeData(decode);
+                    if (m_dicClientTimeTable.ContainsKey(eventTimeData.evKind))
+                    {
+#if UNITY_EDITOR
+                        MyDebug.LogError("ClientTimeTable Data Already Key" + eventTimeData.evKind);
+#endif
+                    }
+                    else
+                    {
+                        m_dicClientTimeTable.Add(eventTimeData.evKind, eventTimeData);
+                    }
+                }
+                break;
+            //case GetRefIdx.EventTimeData:
+            //    MyDebug.LogError("======EventTimeData : " + listData.Count);
+            //    UpdateServerData(listData);
+            //    break;
+            case GetLocalRefIdx.ContinueWinReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    ContinueWinRwdTable rewardTable = new ContinueWinRwdTable(new JsonLstDecode(listData[i]));
+
+                    if (m_dicContinueWinRwdTable.ContainsKey(rewardTable.clearNum) == false)
+                        m_dicContinueWinRwdTable.Add(rewardTable.clearNum, rewardTable);
+                    else
+                        MyDebug.LogWarning("dicContinueWinRwdTable Already Has A Key : " + rewardTable.clearNum);
+                }
+                break;
+            case GetLocalRefIdx.PerfectClearEventReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    ContinueWinRwdTable rewardTable = new ContinueWinRwdTable(new JsonLstDecode(listData[i]));
+
+                    if (m_dicPerfectWinRwdTable.ContainsKey(rewardTable.clearNum) == false)
+                        m_dicPerfectWinRwdTable.Add(rewardTable.clearNum, rewardTable);
+                    else
+                    {
+#if UNITY_EDITOR
+                        MyDebug.LogError($"dicPerfectWinRwdTable Already Has A Key : {rewardTable.clearNum}");
+#endif
+                    }
+                }
+                break;
+            case GetLocalRefIdx.LongTermDisConEventReward:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    LongTermDisConTableData tableData = new LongTermDisConTableData(new JsonLstDecode(listData[i]));
+
+                    longTermTableData.Add(tableData);
+                }
+
+                longTermTableData.Sort((x, y) => x.DisConHour);
+                break;
+            case GetLocalRefIdx.EndlessTreasureTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    EndlessTreasureTableData treasureTableData = new EndlessTreasureTableData(new JsonLstDecode(listData[i]));
+
+                    if (dicEndlessTreasureTableData.ContainsKey(treasureTableData.Level) == false)
+                    {
+                        if (EndlessTreasureMaxLv < treasureTableData.Level)
+                            EndlessTreasureMaxLv = treasureTableData.Level;
+                        dicEndlessTreasureTableData.Add(treasureTableData.Level, treasureTableData);
+                    }
+                    else
+                    {
+                        MyDebug.LogError($"?? : {treasureTableData.Level} !!");
+                    }
+                }
+                break;
+
+            case GetLocalRefIdx.FireWorkEventTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    fireWorkEventTableData.Add(new FireWorkEventTableData(new JsonLstDecode(listData[i])));
+                    //FireWorkEventTableData fireWorkTableData = new FireWorkEventTableData(new JsonLstDecode(listData[i]));
+
+                    //if(dicFireWorkEventTableData.ContainsKey(fireWorkTableData.rewardIdx) == false)
+                    //{
+                    //    dicFireWorkEventTableData.Add(fireWorkTableData.rewardIdx, fireWorkTableData);
+                    //}
+                }
+                break;
+            //case GetRefIdx.LevelAchieveEventTableData:
+            //    for (int i = 0; i < listData.Count; i++)
+            //    {
+            //        levelAchieveEventTableData.Add(new LevelAchieveEventTableData(new JsonLstDecode(listData[i])));
+            //    }
+            //    break;
+            case GetLocalRefIdx.ThreeByThreeClearRewardTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    ThreeByThreeClearRewardTableData tableData = new ThreeByThreeClearRewardTableData(new JsonLstDecode(listData[i]));
+
+
+                    if (threeByThreeRewardTable.ContainsKey(tableData.CompleteCnt) == false)
+                        threeByThreeRewardTable.Add(tableData.CompleteCnt, tableData);
+                }
+                break;
+            case GetLocalRefIdx.HarvestEventTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    HarvestEventTableData tableData = new HarvestEventTableData(new JsonLstDecode(listData[i]));
+
+                    if (HarvestRewardTable.ContainsKey(tableData.rewardIdx) == false)
+                        HarvestRewardTable.Add(tableData.rewardIdx, tableData);
+                }
+                break;
+            case GetLocalRefIdx.HarvestStageIdxTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    HarvestStageIdxTableData tableData = new HarvestStageIdxTableData(new JsonLstDecode(listData[i]));
+
+                    if (HarvestStageTable.ContainsKey(tableData.Idx) == false)
+                        HarvestStageTable.Add(tableData.Idx, tableData);
+                }
+                break;
+            case GetLocalRefIdx.FruitShopEventRewardTableData:
+                for(int i= 0; i< listData.Count; i++)
+                {
+                    FruitShopEventRewardTableData tableData = new FruitShopEventRewardTableData(new JsonLstDecode(listData[i]));
+
+                    if (FruitShopRewardTable.ContainsKey(tableData.OrderIDX) == false)
+                        FruitShopRewardTable.Add(tableData.OrderIDX, tableData);
+                }
+                break;
+            case GetLocalRefIdx.FruitShopEventJuiceRecipeTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    FruitShopEventJuiceRecipeTableData tableData = new FruitShopEventJuiceRecipeTableData(new JsonLstDecode(listData[i]));
+
+                    if (FruitShopRecipeTable.ContainsKey(tableData.JuiceIDX) == false)
+                        FruitShopRecipeTable.Add(tableData.JuiceIDX, tableData);
+                }
+                break;
+            case GetLocalRefIdx.FruitShopEventClientTableData:
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    FruitShopEventClientTableData tableData = new FruitShopEventClientTableData(new JsonLstDecode(listData[i]));
+
+                    if (FruitShopClientTable.ContainsKey(tableData.OrderIDX) == false)
+                        FruitShopClientTable.Add(tableData.OrderIDX, tableData);
+                }
+                break;
+            case GetLocalRefIdx.MileageRewardTable:
+                UpdateMileageTime();
+
+                for (int i = 0; i < listData.Count; i++)
+                {
+                    MileageRewardTable tableData = new MileageRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (MileageTable.ContainsKey(tableData.Idx) == false)
+                        MileageTable.Add(tableData.Idx, tableData);
+                }       
+                break;
+            case GetLocalRefIdx.MileageCompleteRewardTable:
+                for(int i= 0; i< listData.Count; i++)
+                {
+                    MileageCompleteRewardTable tableData = new MileageCompleteRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (MileageCompleteTable.ContainsKey(tableData.Idx) == false)
+                        MileageCompleteTable.Add(tableData.Idx, tableData);
+                }
+                break;
+            case GetLocalRefIdx.AttendCheckEventRewardTable:
+                for(int i= 0; i < listData.Count; i++)
+                {
+                    AttendCheckEventRewardTable tableData = new AttendCheckEventRewardTable(new JsonLstDecode(listData[i]));
+
+                    if (AttendCheckTable.ContainsKey(tableData.Idx) == false)
+                        AttendCheckTable.Add(tableData.Idx, tableData);
+                }
+                break;
+            case GetLocalRefIdx.BuildingEventTable:
+                for(int i= 0; i < listData.Count; i++)
+                {
+                    BuildingEventTable tableData = new BuildingEventTable(new JsonLstDecode(listData[i]));
+
+                    int _type = tableData.AbdTbIdx / 10000;
+
+                    if (_type == (int)BDType.Public || _type == (int)BDType.Deco)
+                        _type = (int)BDType.Total;
+
+                    if (BuildingEventCompleteTable.ContainsKey(_type) == false)
+                        BuildingEventCompleteTable.Add(_type, new List<BuildingEventTable>());
+
+                    if (BuildingEventCompleteTable[_type].Contains(tableData) == false)
+                        BuildingEventCompleteTable[_type].Add(tableData);
+
+                }
+                break;
+        }
+    }
+
+    public int EndlessTreasureMaxLv = 1;
+
+    public EndlessTreasureTableData GetEndlessTreasureTableData(int _lv)
+    {
+        if (dicEndlessTreasureTableData.ContainsKey(_lv))
+        {
+            return dicEndlessTreasureTableData[_lv];
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    public SeasonPassRewardTable GetSeasonPassRewardTable(int rewardLv, SeasonPassType seasonPassType)
+    {
+        if (dicSeasonPassReward.ContainsKey(rewardLv))
+            if (dicSeasonPassReward[rewardLv].ContainsKey(seasonPassType))
+                return dicSeasonPassReward[rewardLv][seasonPassType];
+
+        MyDebug.LogWarning("dicSeasonPassReward Not Contains Key : " + rewardLv + "/" + seasonPassType);
+
+        return null;
+    }
+
+    public int GetSeasonPassUserExp(int _spPoint)
+    {
+        var e = dicSeasonPassLv.GetEnumerator();
+        while (e.MoveNext())
+        {
+            if (e.Current.Value.sectionExp <= _spPoint)
+            {
+                _spPoint -= e.Current.Value.sectionExp;
+            }
+        }
+
+        return _spPoint;
+    }
+
+    public int GetSeasonPassLv(int spPoint)
+    {
+        int spLv = 0;
+
+        foreach (var level in dicSeasonPassLv.Values)
+        {
+            if (level.spLv > spLv && level.needExp <= spPoint)
+                spLv = level.spLv;
+        }
+
+        return spLv;
+    }
+
+    public int GetSeasonPassMaxLv()
+    {
+        return dicSeasonPassLv.Keys.Max();
+    }
+
+    public bool isEventOngoing(EventKind eventKind)
+    {
+        //if (NetManager.instance.isServerConnected == false)
+        if (NetManager.instance.NetworkConnectCheck() == false)
+            return false;
+
+        switch (eventKind)
+        {
+            case EventKind.SeasonPass:
+                return GetCurrentEventTable(EventKind.SeasonPass) != null;
+            case EventKind.Event:
+                return GetCurrentEventTable(EventKind.Event) != null;
+        }
+
+        return false;
+    }
+
+    public SeasonPassLevelTable GetSeasonPassLevelTable(int spLv)
+    {
+        if (dicSeasonPassLv.ContainsKey(spLv))
+            return dicSeasonPassLv[spLv];
+
+        MyDebug.LogWarning("dicSeasonPassLv Not Contains Key : " + spLv);
+
+        return null;
+    }
+
+    public EventDataTable GetCurrentEventTable(EventKind eventKind)
+    {
+        if (dicEventDatas.ContainsKey(eventKind))
+        {
+            foreach (var seasonPass in dicEventDatas[eventKind].Values)
+            {
+                if (seasonPass.eventStartTime <= TimeManager.instance.Now &&
+                    seasonPass.eventEndTime > TimeManager.instance.Now)
+                    return seasonPass;
+            }
+        }
+
+        return null;
+    }
+
+    public EventRewardTable GetEventRewardTable(int rwdIdx)
+    {
+        if (dicEventRewardTable.ContainsKey(rwdIdx))
+            return dicEventRewardTable[rwdIdx];
+
+        return null;
+    }
+
+    public void CheckEventReward(bool _reward)
+    {
+        if (UserDataManager.instance.GetUserEventOnGoing(EventKind.Event))
+        {
+            UserDataManager.instance.RefreshUserSavedEventInfo(EventKind.Event);
+
+            List<ItemData> rewardItems = new List<ItemData>();
+
+            while (true)
+            {
+                EventRewardTable eventRewardTable = EventManager.instance.GetEventRewardTable(UserDataManager.instance.GetCurrEventRewardIdx());
+
+                // 이벤트 포인트를 필요한 만큼 갖고 있을 경우
+                if (UserDataManager.instance.isHavingItem(ItemType.EventGoods, (int)EventKind.Event, eventRewardTable.needNum))
+                {
+                    rewardItems.Add(eventRewardTable.rewardItem);
+
+                    if (_reward)
+                    {
+                        UserDataManager.instance.CheckEventRewardBit(EventKind.Event, eventRewardTable.rwdIdx);
+                        break;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                else
+                    break;
+            }
+
+            // 보상 제공
+            if (rewardItems.Count > 0 && _reward)
+            {
+                UserDataManager.instance.AddUserItem(rewardItems, true, TextData.getText(TextType.PostText, 20));
+                if (UIMain.instance != null)
+                    UIMain.instance.eventNotiActive = false;
+            }
+            else if (rewardItems.Count > 0)
+            {
+                if (UIMain.instance != null)
+                    UIMain.instance.eventNotiActive = true;
+            }
+
+            if (UIMain.instance != null)
+                UIMain.instance.Refresh();
+
+            // 자동 저장
+            //            UserDataManager.instance.AutoSaveData();
+            UserDataManager.instance.SaveDataDicAndFile();
+        }
+
+        // 다른 팝업에서 열어줄거임
+        //if(EventManager.instance.GetDisasterEventRewardData(UserDataManager.instance.GetUserItemCount(ItemType.Goods, (int)GoodsType.DisasterClearPoint), ref disasterKeepWin) != null)
+        //{
+        //    if (UserDataManager.instance.TryRemoveUserItem(ItemType.Goods, (int)GoodsType.DisasterClearPoint, disasterKeepWin))
+        //        UserDataManager.instance.AddUserItem(EventManager.instance.GetDisasterEventRewardData(disasterKeepWin).rewardItem, true, TextData.getText(TextType.PostText, 20));
+        //}
+    }
+    #region Harvest 
+    public DateTime GetCurrHarvestStartTime()
+    {
+
+        EventTimeData temp = GetEventTimeData(ClientEventKind.HarvestEvent);
+
+        if (temp == null)
+            return DateTime.MinValue;
+
+
+        //if(TestSetting.instance.FirstHarvestEvent)
+        //{
+            if (UserDataManager.instance.IsOpenEvent(ClientEventKind.HarvestEvent))
+            {
+                if (UserDataManager.instance.userdatas.FirstHarvestEndTime == DateTime.MinValue)
+                    UserDataManager.instance.userdatas.FirstHarvestEndTime = TimeManager.instance.Now.AddMinutes(temp.evCycleMin);
+                else if (UserDataManager.instance.userdatas.FirstHarvestEndTime > TimeManager.instance.Now)
+                    return TimeManager.instance.GetCycleEventStartTime(UserDataManager.instance.userdatas.FirstHarvestEndTime.AddMinutes(-temp.evCycleMin), temp.evCycleMin, temp.evRestMin);
+            }
+        //}
+        
+
+        //#if UNITY_EDITOR
+        //        if(TestSetting.instance.IsStartHarvestEvent)
+        //        {
+        //            DateTime _now = TimeManager.instance.Now;
+        //            return TimeManager.instance.GetCycleEventStartTime(_now, temp.evCycleMin, temp.evRestMin);
+        //        }
+        //#endif
+
+
+        return TimeManager.instance.GetCycleEventStartTime(temp.EventStartTime,temp.evCycleMin,temp.evRestMin);
+    }
+
+    public DateTime GetCurrHarvestEndTime()
+    {
+        EventTimeData temp = GetEventTimeData(ClientEventKind.HarvestEvent);
+
+        if (temp == null)
+            return DateTime.MinValue;
+
+        return GetCurrHarvestStartTime().AddMinutes(temp.evCycleMin);
+    }
+    public bool isStartHarvest()
+    {
+        bool temp = false;
+
+        if (TimeManager.instance.Now>= GetCurrHarvestStartTime() && TimeManager.instance.Now<= GetCurrHarvestEndTime())
+        {
+            temp= true;
+        }
+        else
+        {
+            temp = false;
+            //초기화
+            UserDataManager.instance.ResetHarvest();
+        }
+        return temp;
+    }
+
+    //확인
+    //public bool isHarvestJoined()
+    //{
+    //    if (NetManager.instance.NetworkConnectCheck() == false) return false;
+
+    //    if (UserDataManager.instance.GetUserId() == 0) return false;
+
+    //    if (DateTime.Equals(TimeManager.instance.Now,GetCurrHarvestStartTime()) == false)
+    //    {
+    //        //체크
+    //        MyDebug.LogError("=====You Have to Change");
+    //    }
+    //    return false;
+    //}
+
+    public ItemData GetHarvestRewardItem(int _idx)
+    {
+        return HarvestRewardTable[_idx].itemdata;
+    }
+
+    public int GetHarvestTargetMaxCnt(int _idx)
+    {
+        return HarvestRewardTable[_idx].accumulateCnt;
+    }
+
+    public int GetHarvestStageFirstIdx()
+    {
+        if (HarvestStageTable.ContainsKey(1) == false)
+            return 0;
+
+        return HarvestStageTable[1].FluitIdx;
+    }
+
+    public int GetHarvestTargetIdx(int _idx)
+    {
+        if (HarvestStageTable.Count <= 0)
+            return 0;
+
+        int temp = _idx % HarvestStageTable.Count;
+
+        if (temp == 0)
+        {
+            return HarvestStageTable[_idx].FluitIdx;
+        }
+
+        return HarvestStageTable[temp].FluitIdx;
+    }
+    #endregion
+    #region Juice Shop
+    public DateTime GetCurrFruitJuiceShopStartTime()
+    {
+        //if(TestSetting.instance.FirstFruitShopEvent)
+        //{
+            //수정 사항 
+            if (UserDataManager.instance.IsOpenEvent(EventKind.FruitJuiceShopEvent))
+            {
+                if (UserDataManager.instance.userdatas.FIrstFruitShopEndTime == DateTime.MinValue)
+                    UserDataManager.instance.userdatas.FIrstFruitShopEndTime = TimeManager.instance.Now.AddMinutes(FruitShopcycleMin);
+                else if (UserDataManager.instance.userdatas.FIrstFruitShopEndTime > TimeManager.instance.Now)
+                    return TimeManager.instance.GetCycleEventStartTime(UserDataManager.instance.userdatas.FIrstFruitShopEndTime.AddMinutes(-FruitShopcycleMin), FruitShopcycleMin, FruitShoprestMin);
+            }
+        //}
+        
+        return TimeManager.instance.GetCycleEventStartTime(FruitShopstartTime,FruitShopcycleMin, FruitShoprestMin);
+    }
+
+    public DateTime GetCurrFruitJuiceShopEndTime()
+    {
+        return GetCurrFruitJuiceShopStartTime().AddMinutes(FruitShopcycleMin);
+    }
+
+    //UIMain에서 확인
+    public bool IsFruitJuiceShopStart()
+    {
+        if(NetManager.instance.NetworkConnectCheck())
+        {
+            return GetCurrFruitJuiceShopStartTime() <= TimeManager.instance.Now && TimeManager.instance.Now < GetCurrFruitJuiceShopEndTime();
+        }
+        return false;
+    }
+
+    public FruitShopEventClientTableData GetFruitClientData(int _orderIDX)
+    {
+        foreach(var _celeb in FruitShopClientTable.Values)
+        {
+            if (_celeb.CelebIDX == _orderIDX)
+            {
+                //MyDebug.LogError("FruitShopEventClientTableData.CelebIDX : " + _celeb.CelebIDX);
+
+                return _celeb;
+            }
+                
+        }
+
+        return null;
+
+        //if (FruitShopClientTable.ContainsKey(_orderIDX))
+        //    return FruitShopClientTable[_orderIDX];
+        //return null;
+    }
+
+    public int GetFruitShopClientIDX(int _orderIDX)
+    {
+        if (FruitShopClientTable.ContainsKey(_orderIDX))
+            return FruitShopClientTable[_orderIDX].CelebIDX;
+        return 0;
+    }
+    public int GetFruitShopClientDataCount()
+    {
+        return FruitShopClientTable.Count;
+    }
+    public Dictionary<int, FruitShopEventJuiceRecipeTableData> GetFruitShopRecipeTable()
+    {
+        return FruitShopRecipeTable;
+    }
+
+    public FruitShopEventJuiceRecipeTableData GetJuiceRecipeData(int _juiceIDX)
+    {
+        return FruitShopRecipeTable[_juiceIDX];
+    }
+
+    public Dictionary<int, FruitShopEventRewardTableData>  GetFruitShopRewardTable()
+    {
+        return FruitShopRewardTable;
+    }
+
+    public FruitShopEventRewardTableData GetFruitShopRewardData(int _idx)
+    {
+        return FruitShopRewardTable[_idx];
+    }
+    #endregion
+    #region EventCenter_Mileage
+    private void UpdateMileageTime()
+    {
+        //시간으로 되어있는거 변경
+        EventTimeData _eventTime = EventManager.instance.GetEventTimeData(ClientEventKind.MileageEvent);
+
+        MileageEventStartTime = _eventTime.evSTime;
+
+#if UNITY_EDITOR
+        if(TestSetting.instance != null && TestSetting.instance.IsStartMileageEvent)
+        {
+            DateTime _now = TimeManager.instance.Now;
+            MileageEventStartTime = new DateTime(_now.Year, _now.Month, _now.Day, MileageEventStartTime.Hour, MileageEventStartTime.Minute, MileageEventStartTime.Second);
+        }
+#endif
+        MileageEvetnCycleMin = _eventTime.evCycleMin;
+        MileageEvetnRestMin = _eventTime.evRestMin;
+    }
+    public bool IsMileageEventStart()
+    {
+        if(NetManager.instance.NetworkConnectCheck())
+        {
+            return GetCurrMileageEventStartTime() <= TimeManager.instance.Now && TimeManager.instance.Now < GetCurrMileageEventEndTime();
+        }
+
+        return false;
+    }
+    public DateTime GetCurrMileageEventStartTime()
+    {
+        return TimeManager.instance.GetCycleEventStartTime(MileageEventStartTime, MileageEvetnCycleMin, MileageEvetnRestMin);
+    }
+
+    public DateTime GetCurrMileageEventEndTime()
+    {
+        return GetCurrMileageEventStartTime().AddMinutes(MileageEvetnCycleMin);
+    }
+
+    public string GetMileageEventPeriod(DateTime _start, DateTime _end)
+    {
+        string _temp = string.Format("{0} {1}/{2}/{3}~{4}/{5}/{6}", TextData.getText(TextType.EventCenter, 11), _start.Year, _start.Month, _start.Day, _end.Year, _end.Month, _end.Day);
+        return _temp;
+    }
+    public Dictionary<int, MileageRewardTable> GetMileageTable()
+    {
+        return MileageTable;
+    }
+
+    public MileageCompleteRewardTable GetMileageCompleteTable()
+    {
+        System.Random rand = new System.Random();
+        int temp =  rand.Next(0, GetMileageCompleteTables().Count);
+        return MileageCompleteTable[temp];
+    }
+
+    public Dictionary<int, MileageCompleteRewardTable> GetMileageCompleteTables()
+    {
+        return MileageCompleteTable;
+    }
+    #endregion
+    #region EventCenter_Attend
+    public Dictionary<int, AttendCheckEventRewardTable> GetAttendCheckEventRewardTable()
+    {
+        return AttendCheckTable;
+    }
+    #endregion
+    #region EventCenter_BuildingEvent
+    public Dictionary<int, List<BuildingEventTable>> GetBuildingEventCompleteTable()
+    {
+        return BuildingEventCompleteTable;
+    }
+    //갯수가 아니라 마지막 인덱스에 들어있는 값으로 가져오기
+    public int GetBuildingEventLastIdx(int _type)
+    {
+#if UNITY_EDITOR
+        MyDebug.LogError("====idx : " + BuildingEventCompleteTable[_type][BuildingEventCompleteTable[_type].Count - 1].IDX + " , _type : " + _type);
+#endif
+        return BuildingEventCompleteTable[_type][BuildingEventCompleteTable[_type].Count - 1].IDX;
+    }
+   
+    public int GetNextBuildingEventIdx(int _type, int _idx)
+    {
+        int _num = 0;
+        var temp = BuildingEventCompleteTable[_type].GetEnumerator();
+        while(temp.MoveNext())
+        {
+            if (temp.Current.IDX == _idx)
+                return BuildingEventCompleteTable[_type][_num + 1].IDX;
+            _num++;
+        }
+
+        return 0;
+    }
+
+    public BuildingEventTable GetBuildingEventTable(int _type, int _idx)
+    {
+        if(BuildingEventCompleteTable.ContainsKey(_type))
+        {
+            var _buildEventCompleteDic = BuildingEventCompleteTable[_type].GetEnumerator();
+            while(_buildEventCompleteDic.MoveNext())
+            {
+                if (_buildEventCompleteDic.Current.IDX == _idx)
+                    return _buildEventCompleteDic.Current;
+            }
+        }
+        return null;
+    }
+    #endregion
+    public int DisasterRewardKeepWinNum(BDState _bdState)
+    {
+        if (dicDisasterEventRewardTable.ContainsKey(_bdState))
+            return dicDisasterEventRewardTable[_bdState].keepClearNum;
+#if UNITY_EDITOR
+        MyDebug.LogError($"DicDisaster Event Reward Table NULL : {_bdState}");
+#endif
+        return 0;
+    }
+
+    public DisasterEventRewardData DisasterRewardData(BDState _bdState)
+    {
+        if (dicDisasterEventRewardTable.ContainsKey(_bdState))
+            return dicDisasterEventRewardTable[_bdState];
+        return null;
+    }
+
+    public int GetEventMaxRewardIdx()
+    {
+        return dicEventRewardTable.Keys.Max();
+    }
+
+    public AttendRewardTable GetAttendRewardTableByLv(int currLv)
+    {
+        AttendRewardTable rewardTable = null;
+
+        foreach (var tmp in dicAttendRewardTable.Values)
+        {
+            if (currLv >= tmp.startLv)
+                rewardTable = tmp;
+        }
+
+        return rewardTable;
+    }
+
+    public AttendRewardTable GetAttendRewardTableByIdx(int idx)
+    {
+        if (dicAttendRewardTable.ContainsKey(idx))
+            return dicAttendRewardTable[idx];
+
+        MyDebug.LogWarning("dicAttendRewardTable Not Contains Key : " + idx);
+
+        return null;
+    }
+
+    public EventDataTable GetEventDataTable(EventKind eventKind, int eventIdx)
+    {
+        if (dicEventDatas[eventKind].ContainsKey(eventIdx))
+            return dicEventDatas[eventKind][eventIdx];
+
+        MyDebug.LogWarning("dicEventDatas[" + eventKind + "] Not Contains Key : " + eventIdx);
+
+        return null;
+    }
+
+    public List<FestivalRewardTable> GetRouletteRewardTables()
+    {
+        return new List<FestivalRewardTable>(dicFestivalRewardTable.Values);
+    }
+
+    public SuddenEvtRewardTable GetSuddenEventTable(int evtIdx)
+    {
+        if (dicSuddenEventRewardTable.ContainsKey(evtIdx))
+            return dicSuddenEventRewardTable[evtIdx];
+
+        MyDebug.LogWarning("dicSuddenEventRewardTable Not Contains Key : " + evtIdx);
+
+        return null;
+    }
+
+    // 퍼즐 클리어 시 일정 확률로 발생 
+    public bool MakeSuddenEvent()
+    {
+        // 진행중인 돌발 이벤트가 있을 경우 발생 안함 // 230207 TY 돌발이벤트는 특정레벨부터 등장하도록 (현재 10레벨)
+        if (UserDataManager.instance.GetUserEventOnGoing(EventKind.SuddenEvent) || UserDataManager.instance.GetUserPuzzleStage() <= WorldDataManager.instance.GetCommonConstValue(CommonConstant.SuddenEventOpenLevel))//DefineClass.SUDDEN_EVENT_START_LEVEL
+            return false;
+
+        int rnd = UnityEngine.Random.Range(0, 100);
+
+        if (rnd < WorldDataManager.instance.GetCommonConstValue(CommonConstant.SurpriseEventRate))
+        {
+            // 오늘 했던 이벤트 인덱스는 제외
+            List<int> possibleEventIdxes = dicSuddenEventRewardTable.Keys.Where(idx =>
+                                            UserDataManager.instance.isGotEventRewardBit(EventKind.SuddenEvent, idx) == false).ToList();
+
+            if (possibleEventIdxes.Count > 0)
+            {
+                int idx = UnityEngine.Random.Range(0, possibleEventIdxes.Count); ;
+                UserDataManager.instance.SetUserSuddenEvent(possibleEventIdxes[idx]);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void AddSurpriseEventCount(BlockType targetType, int cnt)
+    {
+        int userEvtIdx = UserDataManager.instance.GetUserCurrEventIdx(EventKind.SuddenEvent);
+
+        if (dicSuddenEventRewardTable.ContainsKey(userEvtIdx))
+        {
+            List<BlockType> targetBlockTypes = dicSuddenEventRewardTable[userEvtIdx].targetBlocks;
+
+            if (targetBlockTypes.Contains(targetType))
+                UserDataManager.instance.AddUserItem(ItemType.EventGoods, (int)EventKind.SuddenEvent, cnt);
+        }
+    }
+
+    public MagicTreeEventTable GetMagicTreeEventTable(int _evIdx)
+    {
+        if (dicMagicTreeEventTable.ContainsKey(_evIdx))
+            return dicMagicTreeEventTable[_evIdx];
+
+        return null;
+    }
+
+    //public ClearEventRwdTable GetPuzzleClearEventTable(int evtIdx)
+    //{
+    //    if (dicClearEventRwdTable.ContainsKey(evtIdx))
+    //        return dicClearEventRwdTable[evtIdx];
+
+    //    Log.Warning("dicClearEventRwdTable Not Contains Key : " + evtIdx);
+
+    //    return null;
+    //}
+
+    //public UserBDData GetDisasterBuilding(BDState state)
+    //{
+    //    // 재난발생건물 Getter
+    //    // 발생건물 관련해서 수정해야할때 여기만수정
+
+    //    bool bStartBuild = false; // House는 처음부터 지어져있는듯?
+
+    //    List<UserBDData> objs = UserDataManager.instance.GetUserBDDatas();
+
+    //    if (objs == null || objs.Count == 0)
+    //    {
+    //        objs = UserDataManager.instance.GetUserHouse();
+    //        bStartBuild = true;
+    //    }
+
+    //    int building = UnityEngine.Random.Range(0, objs.Count);
+
+    //    UserBDData disasterBuilding = null;
+
+    //    if (WorldBDManager.instance.GetBuildingDataByGridIdx(objs[building].gridIdx).pTableData.type == BDType.House)
+    //        return objs[building];
+
+    //    //if ((objs[building].upgradeLv > 0 || objs[building].upgradeLv == -1) || bStartBuild)
+    //    //    return objs[building];
+
+    //    for (int i = 0; i < objs.Count; i++)
+    //    {
+    //        building--;
+    //        if ((objs[i].upgradeLv > 0 || objs[building].upgradeLv == -1) || bStartBuild)
+    //        {
+    //            disasterBuilding = objs[i];
+
+    //            if (building <= 0)
+    //            {
+    //                break;
+    //            }
+    //        }
+    //    }
+
+    //    return null;
+    //}
+
+    //public void RemoveDisasterEvent(UserBDData _userBDData)
+    //{
+    //    UserDataManager.instance.RemoveDisaster(_userBDData);
+    //}
+
+    public void AddDisasterEvent()
+    {
+        if (IsOpen(ClientEventKind.DisasterEvent) == false) return;
+
+        BDState bdState = UserDataManager.instance.DisasterRandomType();
+
+        if (bdState == BDState.None) // 타입을 못가져왔다면 return
+            return;
+
+        UserBDData bdData = UserDataManager.instance.DisasterRandomBuilding();
+
+        if (bdData == null) return;
+
+        UserDataManager.instance.SetDisaster(bdData, bdState);
+        UIMain.DisasterPopOpen = true;
+
+    }
+
+    public void AddDisasterEvent(BDState state)
+    {
+        //if (IsOpen(ClientEventKind.DisasterEvent) == false) return;
+
+        UserBDData bdData = UserDataManager.instance.DisasterRandomBuilding();
+
+        if (bdData == null) return;
+
+        UserDataManager.instance.SetDisaster(bdData, state);
+        UIMain.DisasterPopOpen = true;
+
+    }
+
+    //public void AddDisasterEvent()
+    //{
+    //    // 한개에서 복수로 바뀜
+    //    int _rand = UnityEngine.Random.Range(1, 101);
+
+    //    if (_rand <= WorldDataManager.instance.GetCommonConstValue(CommonConstant.DisasterStartPer))
+    //    {
+    //        BDState bdState = UserDataManager.instance.DisasterRandomType();
+
+    //        if (bdState == BDState.None || UserDataManager.instance.GetUserItemCount(ItemType.Goods, (int)bdState) >= DisasterRewardKeepWinNum(bdState))
+    //            return;
+
+    //        UserBDData building = UserDataManager.instance.DisasterRandomBuilding();
+
+    //        if (building == null)
+    //            return;
+    //        UserDataManager.instance.SetDisaster(building, bdState);
+    //    }
+    //}
+
+#if UNITY_EDITOR
+
+    //public void AddDisasterEvent(BDState _state)
+    //{
+    //    if (true)
+    //    {
+    //        BDState bdState = _state;
+
+    //        UserBDData building = UserDataManager.instance.DisasterRandomBuilding();
+
+    //        if (building == null)
+    //            return;
+    //        UserDataManager.instance.SetDisaster(building, bdState);
+    //        WorldBDManager.instance.getBuildingObjByGridIdx(building.gridIdx).updateActiveState();
+    //        //PopUpManager.instance.OpenNormalPopup(TextData.getText(TextType.CalamityEvent, 1));
+    //        PopUpManager.instance.OpenPopup<PopupDisasterNotice>(new PopupData(string.Empty, TextData.getText(TextType.CalamityEvent, 1)));
+    //    }
+    //}
+#endif
+
+    public Dictionary<int, MagicTreeEventTable> GetDicMagicTreeTableData() => dicMagicTreeEventTable;
+
+    public int GetMagicTreeEventMax() => dicMagicTreeEventTable.Count;
+
+    //public Dictionary<int, ClearEventRwdTable> getClearEventRwdTableData()
+    //{
+    //    return dicClearEventRwdTable;
+    //}
+
+    //public int GetPuzzleClearEventMax()
+    //{
+    //    return dicClearEventRwdTable.Count;
+    //}
+
+    #region 미니게임
+    public MiniGameTableData getMiniGameTableData(MiniGameType _type)
+    {
+        if (m_dicMiniGameTable.ContainsKey(_type))
+            return m_dicMiniGameTable[_type];
+        return null;
+    }
+    #endregion
+    #region 클라이언트 이벤트
+
+    private void InitEventCount()
+    {
+        // 이벤트 아이템 등 초기화 (클라이언트 이벤트)
+        UserDataManager.instance.InitClientEvent();
+    }
+
+    public void SetContinueWinCount(int _cnt)
+    {
+        if (IsOpen(ClientEventKind.ContinueWinEvent))
+        {
+            UserDataManager.instance.SetContinueWinCount(_cnt);
+        }
+
+        if (IsOpen(ClientEventKind.PerfectWinEvent))
+        {
+            UserDataManager.instance.SetPerfectWinCount(_cnt);
+        }
+    }
+
+    public int GetContinueWinCount()
+    {
+        if (IsOpen(ClientEventKind.ContinueWinEvent))
+            return UserDataManager.instance.GetContinueWinCount();
+        else if (IsOpen(ClientEventKind.PerfectWinEvent))
+            return UserDataManager.instance.GetPerfectWinCount();
+        return 0;
+    }
+
+    public int GetCurrentEventCount(ClientEventKind _evKind, BDState _bdState = BDState.None)
+    {
+        InitEventCount();
+
+        if (IsOpen(_evKind))
+        {
+            switch (_evKind)
+            {
+                case ClientEventKind.ContinueWinEvent:
+                    return UserDataManager.instance.GetContinueWinCount();
+                case ClientEventKind.PerfectWinEvent:
+                    return UserDataManager.instance.GetPerfectWinCount();
+                case ClientEventKind.DisasterEvent:
+                    return UserDataManager.instance.GetUserItemCount(ItemType.Goods, (int)_bdState);
+                case ClientEventKind.MagicTree:
+                    return UserDataManager.instance.GetUserItemCount(ItemType.EventGoods, (int)EventKind.MagicTree);
+            }
+        }
+
+        return 0;
+    }
+
+    public void SetPuzzleSpecialMode()
+    {
+        // 일반 스테이지, 일반 스테이지 (셀럽 포인트 추가), 어려운 스테이지, 매우 어려운 스테이지, 챌린지 스테이지 설정
+        //        int nextStgIndex = UserDataManager.instance.GetUserPuzzleStage() + 1;
+
+        PuzzleMode puzzleMode = UserDataManager.instance.userdatas.puzzleMode;
+
+        puzzleMode = CheckStagePuzzleMode(puzzleMode);
+
+        // 미러볼 PuzzleMode 정하는 방식을 일반모드에서도 동작하게 수정. Rai(24.01.29)
+        puzzleMode = CheckContinueWinPuzzleMode(puzzleMode);
+
+        if (UserDataManager.instance.GetUserPuzzleStage() ==WorldDataManager.instance.GetCommonConstValue(CommonConstant.WhaleTutorialFirstStage)||
+            UserDataManager.instance.GetUserPuzzleStage() ==WorldDataManager.instance.GetCommonConstValue(CommonConstant.WhaleTutorialSecondStage))
+        {
+            puzzleMode = SetTutorialPuzzleMode(puzzleMode);
+#if UNITY_EDITOR
+            MyDebug.LogError($"======puzzlemode is : {puzzleMode} ");
+#endif
+        }
+
+        UserDataManager.instance.userdatas.puzzleMode = puzzleMode;
+    }
+
+    public PuzzleMode CheckSvrStageDataChallengeMode(int _stageIdx)
+    {
+        PuzzleMode _puzzleMode = PuzzleMode.Normal;
+
+        for(CalculusType i = CalculusType.ChallengeStg; i>=CalculusType.ChallengeStg; i--)
+        {
+            if (i == CalculusType.PuzzleClearEventGoods)
+                continue;
+            if (_puzzleMode != PuzzleMode.Normal)
+                return _puzzleMode;
+
+            int _j = 1;
+            int _stg = 0;
+
+            while (_stg < _stageIdx)
+            {
+                _stg = CalculateManager.instance.getCalculateVal(i, _j++);
+            }
+
+            if(_stg == _stageIdx)
+            {
+                switch(i)
+                {
+                    case CalculusType.ChallengeStg:
+                        _puzzleMode = PuzzleMode.Challenge;
+                        break;
+                }
+            }
+        }
+
+        return _puzzleMode;
+    }
+
+    public PuzzleMode CheckStagePuzzleMode(PuzzleMode puzzleMode)
+    {
+        int nextStgIndex = UserDataManager.instance.GetUserPuzzleStage() + 1;
+
+        //MyDebug.LogError("======Puzzle mode : " + puzzleMode);
+        //Ori
+        //for (CalculusType i = CalculusType.Normal_SpecialStg; i <= CalculusType.BonusStg; i++)
+
+        for (CalculusType i = CalculusType.BonusStg; i >= CalculusType.Normal_SpecialStg; i--)
+        {
+            if (i == CalculusType.PuzzleClearEventGoods) continue;
+            if (puzzleMode != PuzzleMode.Normal)
+                continue;
+
+            int j = 1;
+            int stg = 0;
+            while (stg < nextStgIndex)
+            {
+                stg = CalculateManager.instance.getCalculateVal(i, j++);
+                //MyDebug.LogError("======stg : " + stg + " , cal mode : " + i);
+            } 
+
+            if (stg == nextStgIndex)
+            {
+                switch (i)
+                {
+                    case CalculusType.Normal_SpecialStg:
+                        puzzleMode = PuzzleMode.SpecialNormal;
+                        UserDataManager.instance.userdatas.CelebPointIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+                        break;
+                    case CalculusType.HardStg:
+                        puzzleMode = PuzzleMode.Hard;
+                        UserDataManager.instance.userdatas.CelebPointIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+                        break;
+                    case CalculusType.VeryHardStg:
+                        puzzleMode = PuzzleMode.VeryHard;
+                        UserDataManager.instance.userdatas.CelebPointIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+                        break;
+                    case CalculusType.ChallengeStg:
+                        if (ChallengeFail)
+                            puzzleMode = PuzzleMode.Normal;
+                        else
+                        {
+                            puzzleMode = PuzzleMode.Challenge;
+                            UserDataManager.instance.userdatas.CelebPointIdx = CelebManager.instance.GetRandomCelebData(WorldDataManager.instance.GetCommonConstValue(CommonConstant.HaveCelebPointPer)).celebIdx;
+                        }
+                        break;
+                    case CalculusType.BonusStg:
+                        puzzleMode = PuzzleMode.Bonus;
+                        break;
+                }
+            }
+        }
+
+        //우선순위 : 보너스,챌린지,베리하드,하드,노말
+        return puzzleMode;
+    }
+
+    public PuzzleMode CheckContinueWinPuzzleMode(PuzzleMode _puzzleMode)
+    {
+        if (_puzzleMode == PuzzleMode.Challenge)
+            return _puzzleMode;
+
+        //        int _continueWinCntMax = UserDataManager.instance.GetContinueMirroBallWinCnt();
+        int _continueWinCntMax = UserDataManager.instance.GetContinueWin_Cnt();
+
+        for (CalculusType i = CalculusType.MirrorBallHardStg; i <= CalculusType.MirrorBallVeryHardStg; i++)
+        {
+            int j = 1;
+            int _continueWinCnt = 0;
+            while (_continueWinCntMax > _continueWinCnt)
+            {
+                _continueWinCnt = CalculateManager.instance.getCalculateVal(i, j++);
+            }
+
+            if (_continueWinCntMax == _continueWinCnt && _continueWinCntMax > 0)
+            {
+                switch (i)
+                {
+                    case CalculusType.MirrorBallHardStg:
+                        return PuzzleMode.Hard;
+                    case CalculusType.MirrorBallVeryHardStg:
+                        return PuzzleMode.VeryHard;
+                }
+            }
+        }
+
+        return _puzzleMode;
+    }
+
+    public PuzzleMode SetTutorialPuzzleMode(PuzzleMode _puzzleMode)
+    {
+        _puzzleMode = PuzzleMode.Tutorial;
+        return _puzzleMode;
+    }
+    public ClientEventKind GetCurrConWinEvent()
+    {
+        if (IsOpen(ClientEventKind.ContinueWinEvent))
+            return ClientEventKind.ContinueWinEvent;
+        else if (IsOpen(ClientEventKind.PerfectWinEvent))
+            return ClientEventKind.PerfectWinEvent;
+
+        return ClientEventKind.None;
+    }
+
+    public List<ItemData> GetConsWinRwdItems()
+    {
+        List<ItemData> rewardItems = new List<ItemData>();
+
+        rewardItems = GetClientEventRwdItems(GetCurrConWinEvent(), GetContinueWinCount());
+
+        return rewardItems;
+    }
+
+    public List<ItemData> GetClientEventRwdItems(ClientEventKind _evKind, int _currNum)
+    {
+        List<ItemData> rewardItems = new List<ItemData>();
+
+        InitEventCount();
+
+        switch (_evKind)
+        {
+            case ClientEventKind.ContinueWinEvent:
+                // 퍼즐 클리어 이벤트
+                //if (_currNum > WorldDataManager.instance.GetCommonConstValue(CommonConstant.ClearMaxCount))
+                //    _currNum = WorldDataManager.instance.GetCommonConstValue(CommonConstant.ClearMaxCount);
+                if (_currNum > DefineClass.ContinueWinMaxCount)
+                    _currNum = DefineClass.ContinueWinMaxCount;
+
+                if (m_dicContinueWinRwdTable.ContainsKey(_currNum))
+                    rewardItems = m_dicContinueWinRwdTable[_currNum].addRewardList;
+                break;
+            case ClientEventKind.PerfectWinEvent:
+                // 퍼펙트 클리어 이벤트
+                //if (_currNum > WorldDataManager.instance.GetCommonConstValue(CommonConstant.ClearMaxCount))
+                //    _currNum = WorldDataManager.instance.GetCommonConstValue(CommonConstant.ClearMaxCount);
+                if (_currNum > DefineClass.ContinueWinMaxCount)
+                    _currNum = DefineClass.ContinueWinMaxCount;
+
+                if (m_dicPerfectWinRwdTable.ContainsKey(_currNum))
+                    rewardItems = m_dicPerfectWinRwdTable[_currNum].addRewardList;
+                break;
+            case ClientEventKind.DisasterEvent:
+                // 재난 이벤트
+                //rewardItems.Add(DisasterRewardData((BDState)_currNum).rewardItem);
+                rewardItems = DisasterRewardData((BDState)_currNum).rewardItems;
+                break;
+        }
+
+        return rewardItems;
+    }
+
+    public TimeSpan GetClientEventRemainTime(ClientEventKind _evKind)
+    {
+        //수정 사항
+        if(_evKind== ClientEventKind.FireWorks)
+        {
+            if (UserDataManager.instance.userdatas.FirstFireEventTime > TimeManager.instance.Now)
+                return UserDataManager.instance.userdatas.FirstFireEventTime - TimeManager.instance.Now;
+        }
+        else if(_evKind == ClientEventKind.DisasterEvent)
+        {
+            if (UserDataManager.instance.userdatas.FirstDisasterEventTime > TimeManager.instance.Now)
+                return UserDataManager.instance.userdatas.FirstDisasterEventTime - TimeManager.instance.Now;
+        }
+
+
+        //return TimeManager.instance.getCountDownText(GetEventTimeData(_evKind).EventEndTime - TimeManager.instance.Now, false, false);
+        return GetEventTimeData(_evKind).EventEndTime - TimeManager.instance.Now;
+    }
+
+    /// <summary>
+    /// 클라이언트 이벤트 오픈여부 확인
+    /// </summary>
+    /// <returns></returns>
+    public bool IsOpen(ClientEventKind _evKind, bool bUseOpen = true)
+    {
+        //if (_evKind == ClientEventKind.FireWorks) return false;
+
+        if (GameData.bMapEditor)
+            return false;
+
+        if (m_dicClientTimeTable.ContainsKey(_evKind))
+        {
+            //if(TestSetting.instance.FirstFireEvent)
+            //{
+                if (_evKind == ClientEventKind.FireWorks)
+                {
+                    if (UserDataManager.instance.IsOpenEvent(_evKind))
+                    {
+                        if (UserDataManager.instance.userdatas.FirstFireEventTime == DateTime.MinValue)
+                            UserDataManager.instance.userdatas.FirstFireEventTime = TimeManager.instance.Now.AddMinutes(m_dicClientTimeTable[_evKind].evCycleMin);
+                        else if (UserDataManager.instance.userdatas.FirstFireEventTime > TimeManager.instance.Now)
+                            return true;
+                    }
+                }
+            //}
+          
+            //if(TestSetting.instance.FirstDisasterEvent)
+            //{
+                if (_evKind == ClientEventKind.DisasterEvent)
+                {
+                    if (UserDataManager.instance.IsOpenEvent(_evKind))
+                    {
+                        if (UserDataManager.instance.userdatas.FirstDisasterEventTime == DateTime.MinValue)
+                            UserDataManager.instance.userdatas.FirstDisasterEventTime = TimeManager.instance.Now.AddMinutes(m_dicClientTimeTable[_evKind].evCycleMin);
+                        else if (UserDataManager.instance.userdatas.FirstDisasterEventTime > TimeManager.instance.Now)
+                            return true;
+                    }
+                }
+            //}
+            
+
+            if (m_dicClientTimeTable[_evKind].EventEndTime <= TimeManager.instance.Now)
+            {
+                // 상황에따라 초기화 진행해야하나? 유저데이터매니저에서 관리해줘야하나..?
+                m_dicClientTimeTable[_evKind].StartTimeSet();
+            }
+
+            return m_dicClientTimeTable[_evKind].isOpen(bUseOpen);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public EventTimeData GetClearEventTimeData()
+    {
+        return GetEventTimeData(GetCurrConWinEvent());
+    }
+
+    public EventTimeData GetEventTimeData(ClientEventKind _evKind)
+    {
+        if (m_dicClientTimeTable.ContainsKey(_evKind))
+            return m_dicClientTimeTable[_evKind];
+        return null;
+    }
+    #endregion
+
+    public override void Release()
+    {
+        base.Release();
+        ClearEventDataTables();
+    }
+}
